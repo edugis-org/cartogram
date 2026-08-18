@@ -102,6 +102,31 @@ npm run harness      # http://localhost:5174/harness/
 The harness's own logic (`harness/scene.ts`) is DOM-free and covered by the test suite,
 because a harness that misaligns the two maps would invalidate every judgement made with it.
 
+## Provenance
+
+No source code was copied from any cartogram implementation. Every file under `src/`
+and `harness/` was written for this project, from the published papers and from standard
+numerical methods; the algorithms are cited in the source where they are implemented.
+There are **no runtime dependencies at all**, vendored or otherwise — the FFT and cosine
+transforms the flow method needs were written here rather than pulled in, and are checked
+against direct evaluation of their defining sums.
+
+The reference implementations ([`go_cart`](https://github.com/Flow-Based-Cartograms/go_cart),
+[`cartogram-cpp`](https://github.com/mgastner/cartogram-cpp),
+[`go-cart-wasm`](https://github.com/riatelab/go-cart-wasm),
+[`d3-cartogram`](https://github.com/emeeks/d3-cartogram)) were not downloaded or read
+during development — only their READMEs and licence files, to record what exists and under
+what terms. See [`docs/LITERATURE.md`](docs/LITERATURE.md).
+
+The honest caveat: the building blocks here are textbook (the shoelace formula, Lambert
+azimuthal equal-area, iterative Cooley–Tukey, a DCT via a symmetric FFT extension, scanline
+polygon fill). Canonical algorithms written idiomatically tend to converge on similar
+shapes, so resemblance to other implementations at that level is expected and is not
+derivation from them.
+
+Only the data in `data/` comes from outside; its sources and licences are recorded in
+[`data/SOURCES.md`](data/SOURCES.md).
+
 ## Docs
 
 - [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) — what it must do
