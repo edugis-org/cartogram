@@ -2,8 +2,9 @@
 
 Turn GeoJSON into cartograms. TypeScript, browser-compatible, **zero runtime dependencies**.
 
-Status: **M0 + M1 complete.** The pipeline, the Olson non-contiguous method and the metric
-suite work end to end on real data. Contiguous methods (force-based, then flow-based) are next.
+Status: **M0–M2 complete.** The pipeline, the Olson non-contiguous method, the metric suite and
+the human review harness work end to end on real data. Contiguous methods (force-based,
+then flow-based) are next.
 
 ```ts
 import { cartogram } from 'cartogram-ts';
@@ -47,6 +48,28 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   boundary-detail retention, which catch a method rounding regions into circles even when
   its area error looks perfect.
 - **57 tests**, including the M1 exit criterion run over all 15 datasets in `data/`.
+
+## Review harness
+
+Cartogram quality is not only area error: the map has to stay **recognizable**. The harness
+is where a person decides that, and it records the decision.
+
+```
+npm run harness      # http://localhost:5174/harness/
+```
+
+- every dataset in `data/` x every method x its parameters, all in the browser
+- side-by-side original and cartogram, or a single view with a **morph slider** and an
+  animate button - the transition is what makes a distortion legible
+- ghost outline of the original, adjacency-graph overlay, choropleth by area error or by
+  grew/shrank, hover for per-feature value, area ratio and error
+- live metrics panel, including the anti-blob guard (compactness drift, detail retention)
+- **verdict capture**: recognizable / borderline / unusable plus notes, written with the
+  run's metrics to `harness/verdicts.json` so a change that quietly ruins the maps shows up
+  as a regression rather than being discovered by chance
+
+The harness's own logic (`harness/scene.ts`) is DOM-free and covered by the test suite,
+because a harness that misaligns the two maps would invalidate every judgement made with it.
 
 ## Docs
 

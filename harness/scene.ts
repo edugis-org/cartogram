@@ -1,0 +1,99 @@
+import type { Feature, FeatureCollection } from 'geojson';
+import { cartogram, pack, adjacency as adjacencyPairs } from '../src/index.ts';
+import { allFeatureAreas } from '../src/geometry/area.ts';
+import type {
+  AreaFeature,
+  CartogramOptions,
+  CartogramResult,
+  MethodName,
+  MissingPolicy,
+  ProjectionName,
+} from '../src/types.ts';
+import type { Scene } from './render.ts';
+
+export interface RunSpec {
+  value: string;
+  method: MethodName;
+  fit?: 'total' | 'max';
+  projection?: ProjectionName;
+  missing?: MissingPolicy;
+}
+
+export function areaFeatures(fc: FeatureCollection): AreaFeature[] {
+  return fc.features.filter(
+    (f: Feature) => f.geometry?.type === 'Polygon' || f.geometry?.type === 'MultiPolygon',
+  ) as AreaFeature[];
+}
+
+export function labelOf(f: Feature, i: number): string {
+  const p = (f.properties ?? {}) as Record<string, unknown>;
+  for (const k of ['NAME', 'name', 'statnaam', 'NUTS_NAME', 'NAME_LATN', 'id']) {
+    if (typeof p[k] === 'string') return p[k];
+  }
+  return String(f.id ?? `#${i}`);
+}
+
+/**
+ * Build everything the renderer needs for one review run.
+ *
+ * The input geometry is obtained by running the *same pipeline* with method
+ * 'identity', not by packing the raw file: that way both sides are projected,
+ * value-filtered and dropped identically, so vertex i of feature f means the same
+ * thing on both sides and the morph can interpolate straight between them. Doing
+ * it any other way silently misaligns the two maps whenever a feature is dropped.
+ *
+ * DOM-free on purpose, so the harness's own logic is covered by the test suite
+ * rather than only by looking at it.
+ */
+export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene; result: CartogramResult } {
+  const base = {
+    value: spec.value,
+    projection: spec.projection ?? 'auto',
+    missing: spec.missing ?? 'zero',
+    negative: 'clamp' as const,
+    unproject: false, // stay in the equal-area plane; that is what we are judging
+  };
+
+  const before = cartogram(fc, { ...base, method: 'identity' } as CartogramOptions);
+  const result = cartogram(fc, {
+    ...base,
+    method: spec.method,
+    ...(spec.method === 'olson' ? { fit: spec.fit ?? 'total' } : {}),
+  } as CartogramOptions);
+
+  const kept = areaFeatures(before.featureCollection);
+  const gA = pack(kept);
+  const gB = pack(areaFeatures(result.featureCollection));
+
+  if (gA.coords.length !== gB.coords.length) {
+    throw new Error(
+      `harness: geometry mismatch (${gA.coords.length} vs ${gB.coords.length} coordinates); ` +
+        `the morph would misalign`,
+    );
+  }
+
+  const inAreas = allFeatureAreas(gA);
+  const outAreas = allFeatureAreas(gB);
+  const ratios = new Float64Array(gA.featCount);
+  for (let f = 0; f < gA.featCount; f++) {
+    ratios[f] = inAreas[f]! > 0 ? outAreas[f]! / inAreas[f]! : 0;
+  }
+
+  const adjacency: [number, number][] = Array.from(adjacencyPairs(gA), (k) => {
+    const [i, j] = k.split('|');
+    return [Number(i), Number(j)] as [number, number];
+  });
+
+  return {
+    scene: {
+      geom: gA,
+      a: gA.coords,
+      b: gB.coords,
+      errors: Float64Array.from(result.diagnostics.map((d) => d.error)),
+      ratios,
+      adjacency,
+      labels: kept.map(labelOf),
+    },
+    result,
+  };
+}

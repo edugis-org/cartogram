@@ -61,12 +61,17 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   projected world coordinates (~1e7 m) loses ~9 significant digits to cancellation; areas
   and centroids are now accumulated relative to each ring's first vertex.
 
-### M2 — Human review harness (1 week)
+### M2 — Human review harness ✅ done
 - Vite browser app: dataset picker × method picker × parameter panel.
 - Side-by-side + overlay + ghost-outline + animated morph.
 - Area-error choropleth, adjacency-graph overlay.
 - Verdict capture (recognizable / borderline / unusable + notes) → `harness/verdicts.json`.
 - **Exit:** we can look at an Olson cartogram of NL provinces and the world and judge it.
+  **Met.** Vite app with a dev-server endpoint persisting verdicts to
+  `harness/verdicts.json`; canvas renderer with pan/zoom, morph, ghost, adjacency and
+  choropleth overlays. Scene construction was pulled out of the DOM into `harness/scene.ts`
+  and tested across all datasets: before/after geometry must stay aligned vertex for vertex,
+  or the morph animates between mismatched features and every visual verdict is worthless.
 
 ### M3 — Contiguous #1: force-based (Sun 2020 / F4Carto, DCN 1985 lineage) (2 weeks)
 - **Topology-preserving densification pass first** (Duncan & Gastner 2025); without it long

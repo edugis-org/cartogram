@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cartogram-ts review harness</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>cartogram-ts <span>review harness</span></h1>
+      <p id="status">loading…</p>
+    </header>
+
+    <main>
+      <aside id="controls">
+        <section>
+          <h2>Dataset</h2>
+          <label>Data <select id="dataset"></select></label>
+          <label>Attribute <select id="attribute"></select></label>
+          <label>Missing values
+            <select id="missing">
+              <option value="error">error</option>
+              <option value="zero" selected>zero</option>
+              <option value="mean">mean</option>
+              <option value="drop">drop</option>
+            </select>
+          </label>
+          <p id="dataset-note" class="note"></p>
+        </section>
+
+        <section>
+          <h2>Method</h2>
+          <label>Method
+            <select id="method">
+              <option value="olson" selected>olson — non-contiguous (1976)</option>
+              <option value="identity">identity — passthrough</option>
+            </select>
+          </label>
+          <label id="fit-row">Fit
+            <select id="fit">
+              <option value="total" selected>total area</option>
+              <option value="max">largest region unchanged</option>
+            </select>
+          </label>
+          <label>Projection
+            <select id="projection">
+              <option value="auto" selected>auto</option>
+              <option value="laea">Lambert azimuthal equal-area</option>
+              <option value="cylindrical-equal-area">Lambert cylindrical equal-area</option>
+              <option value="none">none (already planar)</option>
+            </select>
+          </label>
+        </section>
+
+        <section>
+          <h2>View</h2>
+          <label>Layout
+            <select id="layout">
+              <option value="side" selected>side by side</option>
+              <option value="single">single, morphable</option>
+            </select>
+          </label>
+          <label>Colour
+            <select id="choropleth">
+              <option value="none" selected>none</option>
+              <option value="ratio">grew / shrank</option>
+              <option value="error">area error</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="ghost" checked /> ghost of original outline</label>
+          <label class="check"><input type="checkbox" id="adjacency" /> adjacency graph</label>
+          <div class="morph">
+            <label>Morph <input type="range" id="morph" min="0" max="1" step="0.01" value="1" /></label>
+            <button id="play" type="button">▶ animate</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Metrics</h2>
+          <div id="metrics" class="metrics">—</div>
+        </section>
+
+        <section>
+          <h2>Verdict</h2>
+          <p class="note">
+            Quality is not only area error. Judge whether the map is still
+            <strong>recognizable</strong>. Verdicts are written to
+            <code>harness/verdicts.json</code>.
+          </p>
+          <div class="verdict-buttons">
+            <button data-verdict="recognizable" type="button">recognizable</button>
+            <button data-verdict="borderline" type="button">borderline</button>
+            <button data-verdict="unusable" type="button">unusable</button>
+          </div>
+          <textarea id="verdict-notes" rows="3" placeholder="notes (what looks wrong?)"></textarea>
+          <p id="verdict-state" class="note"></p>
+        </section>
+      </aside>
+
+      <div id="stage">
+        <figure id="pane-a">
+          <figcaption>original map <span class="hint">drag to pan · scroll to zoom</span></figcaption>
+          <canvas id="canvas-a"></canvas>
+        </figure>
+        <figure id="pane-b">
+          <figcaption id="caption-b">cartogram</figcaption>
+          <canvas id="canvas-b"></canvas>
+        </figure>
+        <div id="tooltip" hidden></div>
+      </div>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
