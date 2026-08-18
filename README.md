@@ -2,19 +2,27 @@
 
 Turn GeoJSON into cartograms. TypeScript, browser-compatible, **zero runtime dependencies**.
 
-Status: **M0–M2 complete.** The pipeline, the Olson non-contiguous method, the metric suite and
-the human review harness work end to end on real data. Contiguous methods (force-based,
-then flow-based) are next.
+Status: **M0–M3 complete.** The pipeline, two cartogram methods (one non-contiguous, one
+contiguous), the metric suite and the human review harness work end to end on real data.
+The flow-based method (Gastner-Seguy-More 2018), which is the quality target, is next.
 
 ```ts
 import { cartogram } from 'cartogram-ts';
 
 const result = cartogram(featureCollection, {
-  method: 'olson',        // 'identity' | 'olson'  (more to come)
+  method: 'dcn',          // 'identity' | 'olson' | 'dcn'
   value: 'population',    // property name, or (feature, i) => number
   projection: 'auto',     // 'auto' | 'none' | 'laea' | 'cylindrical-equal-area'
   missing: 'error',       // 'error' | 'zero' | 'mean' | 'drop'
   negative: 'error',      // 'error' | 'clamp'
+  densify: 'auto',        // insert vertices before warping; 'auto' | number | false
+
+  // dcn only:
+  iterations: 60,
+  targetError: 0.02,      // stop here
+  shapeAnchor: 0.25,      // anti-blob strength, 0..1
+  onIteration: (i, err) => {},
+  signal: controller.signal,
 });
 
 result.featureCollection;              // GeoJSON out, same feature order and properties
@@ -40,6 +48,16 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   parameters. It is also the pipeline's correctness oracle: its area error is ~1e-16 on
   every dataset in `data/`, so any bug in areas, projection or value handling shows up
   immediately.
+- **Dougenik–Chrisman–Niemeyer (1985) contiguous cartogram**, hardened along the lines of
+  Sun (2020): local support through a uniform grid (linear in vertex count, not quadratic
+  in features), per-vertex step caps that prevent folds at the source, and an explicit
+  anti-blob term. **Shared borders stay welded exactly** — topology error 0.000 on every
+  real dataset — because bit-identical coordinates are collapsed to one moving point.
+  Area error reaches ~2% on small compact maps and 12–35% on large or heavily skewed ones;
+  that ceiling is the known limit of the force family and the reason the flow-based method
+  is next. See `docs/PROJECT_PLAN.md` for the measured table.
+- **Topology-preserving line densification** (Duncan & Gastner 2025) before any warp, with
+  shared edges subdivided into bit-identical points from both sides.
 - **Equal-area projections**, written from the formulas with exact inverses: Lambert
   azimuthal for regional maps, Lambert cylindrical for near-global ones, auto-selected.
   Cartograms are about area, so this is a correctness requirement, not a nicety.

@@ -19,7 +19,7 @@ export type MissingPolicy = 'error' | 'zero' | 'mean' | 'drop';
 /** Planar working coordinate system. */
 export type ProjectionName = 'auto' | 'none' | 'laea' | 'cylindrical-equal-area';
 
-export type MethodName = 'identity' | 'olson';
+export type MethodName = 'identity' | 'olson' | 'dcn';
 
 export interface CommonOptions {
   /** Property name or accessor yielding the numeric cartogram variable. */
@@ -39,6 +39,21 @@ export interface CommonOptions {
   unproject?: boolean;
   /** Compute quality metrics (adds a pass over the geometry). Default `true`. */
   metrics?: boolean;
+  /**
+   * Insert vertices along long boundary edges before warping, in a way that keeps
+   * shared borders bit-identical (Duncan & Gastner 2025). Warping only the existing
+   * vertices lets a long straight edge cut through its neighbours.
+   * `auto` (the default) enables it for warp-based methods and skips it for methods
+   * that move whole features rigidly; a number sets the spacing in working-plane
+   * units; `false` disables it.
+   */
+  densify?: 'auto' | number | false;
+  /**
+   * Also return the projected (and densified) input geometry as `result.baseline`.
+   * Needed to compare or morph input against output vertex for vertex, since
+   * densification changes the vertex count. Default `false`.
+   */
+  includeBaseline?: boolean;
 }
 
 export interface IdentityOptions extends CommonOptions {
@@ -55,7 +70,29 @@ export interface OlsonOptions extends CommonOptions {
   fit?: 'total' | 'max';
 }
 
-export type CartogramOptions = IdentityOptions | OlsonOptions;
+export interface DcnOptions extends CommonOptions {
+  method: 'dcn';
+  /** Maximum iterations. Default 60. */
+  iterations?: number;
+  /** Stop once the mean cartographic error reaches this. Default 0.02 (2%). */
+  targetError?: number;
+  /** Influence radius as a multiple of a region's own radius. Default 5. */
+  cutoff?: number;
+  /** Step size multiplier. Default 1. Lower it if the map folds. */
+  damping?: number;
+  /**
+   * Anti-blob strength, 0..1. Default 0.25. The force field is smooth and slowly
+   * erases boundary detail, which is what rounds regions into circles; this puts the
+   * detail back at the region's new scale. 0 reproduces textbook DCN, blobbing and all.
+   */
+  shapeAnchor?: number;
+  /** Progress callback, for animating or inspecting convergence (F17). */
+  onIteration?: (iteration: number, meanError: number) => void;
+  /** Cancellation (F17). */
+  signal?: AbortSignal;
+}
+
+export type CartogramOptions = IdentityOptions | OlsonOptions | DcnOptions;
 
 /** Per-feature diagnostics, in the working (projected) plane. */
 export interface FeatureDiagnostic {
@@ -114,10 +151,27 @@ export interface CartogramMetrics {
   vertexCount: number;
   /** Milliseconds spent inside cartogram(), excluding metric computation. */
   runtimeMs: number;
+  /** Vertices inserted by densification, and the spacing used. */
+  densification?: { inserted: number; spacing: number };
+}
+
+export interface IterationReport {
+  iterations: number;
+  meanError: number;
+  converged: boolean;
+  /** Times a step had to be halved because it would have folded a ring. */
+  foldRetries: number;
 }
 
 export interface CartogramResult {
   featureCollection: FeatureCollection;
+  /**
+   * The projected, densified input, when `includeBaseline` is set. Aligned with the
+   * output vertex for vertex, so the two can be compared or morphed directly.
+   */
+  baseline?: FeatureCollection;
+  /** Convergence detail for iterative methods. */
+  iteration?: IterationReport;
   diagnostics: FeatureDiagnostic[];
   metrics: CartogramMetrics;
   /** Non-fatal problems: dropped features, substituted values, clamped negatives. */

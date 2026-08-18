@@ -4,13 +4,16 @@ import type {
   CartogramOptions,
   CartogramResult,
   FeatureDiagnostic,
+  IterationReport,
 } from './types.ts';
 import { pack, unpack, cloneCoords, vertexCount } from './geometry/flat.ts';
+import { densify, autoSpacing } from './topology/densify.ts';
 import { allFeatureAreas } from './geometry/area.ts';
 import { partition } from './io/validate.ts';
 import { extractValues } from './io/values.ts';
 import { chooseProjection, projectInPlace, unprojectInPlace } from './io/project.ts';
 import { olson } from './methods/olson.ts';
+import { dcn, DCN_DEFAULTS } from './methods/dcn.ts';
 import { cartographicError } from './metrics/area.ts';
 import { topologyError } from './metrics/topology.ts';
 import { shapePreservation } from './metrics/shape.ts';
@@ -22,6 +25,8 @@ export { cartographicError } from './metrics/area.ts';
 export { topologyError, adjacency } from './metrics/topology.ts';
 export { shapePreservation, compactness, featurePerimeter } from './metrics/shape.ts';
 export { laea, cylindricalEqualArea, chooseProjection } from './io/project.ts';
+export { densify, autoSpacing } from './topology/densify.ts';
+export { buildVertexIndex, sharedFraction } from './topology/vertices.ts';
 
 /**
  * Turn a GeoJSON FeatureCollection into a cartogram: feature areas rescaled to be
@@ -59,16 +64,31 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   const keptSubstituted = substituted.filter((_, i) => !dropSet.has(i));
 
   // --- geometry ---------------------------------------------------------------
-  const packed = pack(kept.map((k) => k.feature));
+  let packed = pack(kept.map((k) => k.feature));
   const projection = chooseProjection(packed, options.projection ?? 'auto');
   projectInPlace(packed, projection);
 
-  const before = options.metrics === false ? null : cloneCoords(packed);
+  // Densify before warping, never after: a long straight edge moved only at its
+  // endpoints cuts through its neighbours (F20, Duncan & Gastner 2025). Methods that
+  // move whole features rigidly cannot bend an edge, so they skip it by default.
+  const warps = options.method === 'dcn';
+  const requested = options.densify ?? 'auto';
+  const spacing =
+    requested === false ? 0 : requested === 'auto' ? (warps ? autoSpacing(packed) : 0) : requested;
+  let densification: { inserted: number; spacing: number } | undefined;
+  if (spacing > 0) {
+    const d = densify(packed, spacing);
+    packed = d.geometry;
+    densification = { inserted: d.inserted, spacing: d.spacing };
+  }
+
+  const before = options.metrics === false && !options.includeBaseline ? null : cloneCoords(packed);
   const inputAreas = allFeatureAreas(packed);
 
   // --- transform --------------------------------------------------------------
   const t0 = now();
   let targetAreas: Float64Array;
+  let iteration: IterationReport | undefined;
   switch (options.method) {
     case 'identity':
       targetAreas = inputAreas.slice();
@@ -76,6 +96,25 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     case 'olson':
       targetAreas = olson(packed, keptValues, { fit: options.fit ?? 'total' });
       break;
+    case 'dcn': {
+      const report = dcn(packed, keptValues, {
+        iterations: options.iterations ?? DCN_DEFAULTS.iterations,
+        targetError: options.targetError ?? DCN_DEFAULTS.targetError,
+        cutoff: options.cutoff ?? DCN_DEFAULTS.cutoff,
+        damping: options.damping ?? DCN_DEFAULTS.damping,
+        shapeAnchor: options.shapeAnchor ?? DCN_DEFAULTS.shapeAnchor,
+        onIteration: options.onIteration,
+        signal: options.signal,
+      });
+      targetAreas = report.targetAreas;
+      iteration = {
+        iterations: report.iterations,
+        meanError: report.meanError,
+        converged: report.converged,
+        foldRetries: report.foldRetries,
+      };
+      break;
+    }
     default: {
       const exhaustive: never = options;
       throw new Error(`unknown method: ${JSON.stringify(exhaustive)}`);
@@ -92,6 +131,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     featureCount: packed.featCount,
     vertexCount: vertexCount(packed),
     runtimeMs,
+    ...(densification ? { densification } : {}),
   };
 
   if (before) {
@@ -134,7 +174,18 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   });
 
   const featureCollection: FeatureCollection = { ...collection, type: 'FeatureCollection', features };
-  return { featureCollection, diagnostics, metrics, warnings };
+  const result: CartogramResult = { featureCollection, diagnostics, metrics, warnings };
+  if (iteration) result.iteration = iteration;
+
+  if (options.includeBaseline && before) {
+    if (options.unproject !== false) unprojectInPlace(before, projection);
+    const baseGeoms = unpack(before);
+    result.baseline = {
+      type: 'FeatureCollection',
+      features: kept.map((k, i) => ({ ...k.feature, geometry: baseGeoms[i]! })),
+    };
+  }
+  return result;
 }
 
 function now(): number {

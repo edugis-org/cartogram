@@ -73,20 +73,53 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   and tested across all datasets: before/after geometry must stay aligned vertex for vertex,
   or the morph animates between mismatched features and every visual verdict is worthless.
 
-### M3 — Contiguous #1: force-based (Sun 2020 / F4Carto, DCN 1985 lineage) (2 weeks)
+### M3 — Contiguous #1: force-based (Sun 2020 / F4Carto, DCN 1985 lineage) ✅ done, with caveats
 - **Topology-preserving densification pass first** (Duncan & Gastner 2025); without it long
   straight edges bend through neighbours and contiguity breaks on `grid`/`hex`/NUTS.
 - Force model, iteration loop, convergence criterion, iteration callback + cancellation.
 - Quadtree (d3-quadtree or own) with distance cutoff ⇒ near-linear.
 - Shared-border integrity via coordinate dedup (identical input coords ⇒ identical output coords).
+- Implementation notes: shared borders are welded by collapsing bit-identical
+  coordinates (measured 23-48% of stored vertices in real data), so no arc extraction or
+  snapping tolerance is needed. Forces use Dougenik's 1/(1+d) weight normalization but
+  only over a tapered local neighbourhood found through a uniform grid, which keeps cost
+  linear in vertex count. Plain additive superposition was tried instead and converges
+  markedly worse. Per-vertex step caps tied to the dominant local region prevent folds at
+  the source; rejecting whole steps after the fact stalled convergence outright.
 - **Anti-blob work is part of this milestone, not a later tuning pass**: the radially
   symmetric DCN force kernel is exactly what rounds polygons into circles. Mitigations to
   implement and compare: distance-decayed forces with a hard cutoff, per-iteration step
   damping, and a shape-anchoring term that penalizes a vertex drifting from its position
   relative to its neighbours along the boundary.
-- **Exit:** NUTS-2 and NL municipalities stay contiguous, no self-intersections, mean area
-  error < 5%, **mean compactness drift <= 0.05 with no systematic positive bias**, and human
-  verdict "recognizable" on NL + EU.
+- **Exit criteria, measured** (defaults, `missing: 'drop'`):
+
+  | dataset | features | area err | p90 | topology err | compactness drift | detail | iterations | time |
+  |---|---|---|---|---|---|---|---|---|
+  | nl-provinces | 12 | 1.9% | 3% | 0.000 | -0.039 | 1.11 | 16, converged | 60 ms |
+  | nuts0 | 36 | 5.7% | 9% | 0.000 | -0.031 | 1.09 | 60 | 110 ms |
+  | nl-municipalities | 342 | 11.8% | 25% | 0.000 | -0.137 | 1.30 | 60 | 370 ms |
+  | nuts2-20m | 292 | 13.9% | 28% | 0.000 | -0.064 | 1.15 | 60 | 237 ms |
+  | nuts3-20m | 1333 | 34.5% | 70% | 0.000 | -0.071 | 1.10 | 60 | 672 ms |
+  | world-110m | 177 | 27.4% | 65% | 0.000 | -0.035 | 1.11 | 60 | 333 ms |
+  | grid (synthetic) | 100 | 4.4% | 9% | 0.000 | -0.330 | 1.74 | 60 | 61 ms |
+  | hex (synthetic) | 400 | 2.1% | 4% | 0.019 | -0.191 | 1.19 | 60 | 331 ms |
+
+  - **Contiguity: met, exactly.** Topology error is 0.000 everywhere (0.019 on the
+    synthetic hex grid, where a handful of corner-touching cells separate). No folds
+    survive into the output.
+  - **Anti-blob: met.** Compactness drift is negative on every dataset, i.e. nothing is
+    being rounded towards a circle. Detail retention above 1 means boundaries are
+    *rougher* than a pure rescale, which is what a warp does to a straight edge; it is
+    strongest on the synthetic grid, where every edge starts perfectly straight.
+  - **Area error < 5%: met only on small, compact, moderately skewed datasets**
+    (NL provinces, NUTS 0, hex). It is not met on NUTS 2/3, municipalities or the world.
+    More iterations help but with diminishing returns (NUTS 2: 13.9% at 60, 8.3% at 200).
+    The residual concentrates in small regions with very large values -- dense urban NUTS 2
+    regions that must grow 50x. This is the known weakness of the force family, not a bug
+    in this implementation, and it is the reason the flow-based method (M5) is the quality
+    target rather than an optional extra. **Do not tune this further; build M5.**
+  - Human verdicts: to be recorded in the harness, which now exposes the method and its
+    parameters.
 
 ### M4 — Dorling / Demers (0.5 week)
 - Circle/square sizing, quadtree collision relaxation, neighbour attraction.

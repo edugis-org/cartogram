@@ -14,6 +14,11 @@ const els = {
   method: $<HTMLSelectElement>('method'),
   fit: $<HTMLSelectElement>('fit'),
   fitRow: $('fit-row'),
+  dcnParams: $('dcn-params'),
+  iterations: $<HTMLInputElement>('iterations'),
+  shapeAnchor: $<HTMLInputElement>('shapeAnchor'),
+  cutoff: $<HTMLInputElement>('cutoff'),
+  damping: $<HTMLInputElement>('damping'),
   projection: $<HTMLSelectElement>('projection'),
   layout: $<HTMLSelectElement>('layout'),
   choropleth: $<HTMLSelectElement>('choropleth'),
@@ -47,6 +52,9 @@ function runKey(): string {
     els.attribute.value,
     els.method.value,
     els.method.value === 'olson' ? els.fit.value : '-',
+    els.method.value === 'dcn'
+      ? `it${els.iterations.value} a${els.shapeAnchor.value} c${els.cutoff.value} d${els.damping.value}`
+      : '-',
     els.projection.value,
     els.missing.value,
   ].join(' | ');
@@ -74,6 +82,10 @@ async function run(): Promise<void> {
       fit: els.fit.value as 'total' | 'max',
       projection: els.projection.value as ProjectionName,
       missing: els.missing.value as MissingPolicy,
+      iterations: Number(els.iterations.value),
+      shapeAnchor: Number(els.shapeAnchor.value),
+      cutoff: Number(els.cutoff.value),
+      damping: Number(els.damping.value),
     });
     scene = built.scene;
     result = built.result;
@@ -87,6 +99,15 @@ async function run(): Promise<void> {
 
   resize(true);
   showMetrics(result);
+  if (result.iteration) {
+    const it = result.iteration;
+    els.metrics.insertAdjacentHTML(
+      'beforeend',
+      `<div><span class="k">iterations</span><span class="${it.converged ? 'good' : 'bad'}">` +
+        `${it.iterations}${it.converged ? ' (converged)' : ' (limit)'}</span></div>` +
+        `<div><span class="k">fold retries</span><span>${it.foldRetries}</span></div>`,
+    );
+  }
   await showVerdictState();
   const m = result.metrics;
   els.status.textContent =
@@ -344,9 +365,17 @@ els.dataset.addEventListener('change', () => {
   fillAttributes();
   void run();
 });
-for (const el of [els.attribute, els.missing, els.method, els.fit, els.projection]) {
+function syncMethodControls(): void {
+  els.fitRow.style.display = els.method.value === 'olson' ? '' : 'none';
+  els.dcnParams.style.display = els.method.value === 'dcn' ? '' : 'none';
+}
+
+for (const el of [
+  els.attribute, els.missing, els.method, els.fit, els.projection,
+  els.iterations, els.shapeAnchor, els.cutoff, els.damping,
+]) {
   el.addEventListener('change', () => {
-    els.fitRow.style.display = els.method.value === 'olson' ? '' : 'none';
+    syncMethodControls();
     void run();
   });
 }
@@ -357,4 +386,5 @@ window.addEventListener('resize', () => resize());
 
 fillDatasets();
 fillAttributes();
+syncMethodControls();
 void run();

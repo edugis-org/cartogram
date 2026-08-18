@@ -47,6 +47,16 @@ select, textarea {
   padding: 5px 6px;
 }
 input[type="checkbox"] { width: auto; margin: 0; }
+input[type="number"] {
+  width: 100%;
+  margin-top: 3px;
+  font: inherit;
+  background: #0b1220;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 5px 6px;
+}
 button {
   background: #172136;
   color: var(--text);

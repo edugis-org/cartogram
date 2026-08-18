@@ -17,6 +17,10 @@ export interface RunSpec {
   fit?: 'total' | 'max';
   projection?: ProjectionName;
   missing?: MissingPolicy;
+  iterations?: number;
+  shapeAnchor?: number;
+  cutoff?: number;
+  damping?: number;
 }
 
 export function areaFeatures(fc: FeatureCollection): AreaFeature[] {
@@ -36,32 +40,38 @@ export function labelOf(f: Feature, i: number): string {
 /**
  * Build everything the renderer needs for one review run.
  *
- * The input geometry is obtained by running the *same pipeline* with method
- * 'identity', not by packing the raw file: that way both sides are projected,
- * value-filtered and dropped identically, so vertex i of feature f means the same
- * thing on both sides and the morph can interpolate straight between them. Doing
- * it any other way silently misaligns the two maps whenever a feature is dropped.
+ * The input geometry comes from `result.baseline`, i.e. the projected and densified
+ * input the method actually started from -- not from packing the raw file. Both sides
+ * are then projected, value-filtered, dropped and densified identically, so vertex i of
+ * feature f means the same thing on both sides and the morph can interpolate straight
+ * between them. Packing the raw file instead misaligns the two maps as soon as a
+ * feature is dropped, and breaks outright for warp methods, which insert vertices
+ * before warping.
  *
  * DOM-free on purpose, so the harness's own logic is covered by the test suite
  * rather than only by looking at it.
  */
 export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene; result: CartogramResult } {
-  const base = {
+  const result = cartogram(fc, {
     value: spec.value,
     projection: spec.projection ?? 'auto',
     missing: spec.missing ?? 'zero',
-    negative: 'clamp' as const,
+    negative: 'clamp',
     unproject: false, // stay in the equal-area plane; that is what we are judging
-  };
-
-  const before = cartogram(fc, { ...base, method: 'identity' } as CartogramOptions);
-  const result = cartogram(fc, {
-    ...base,
+    includeBaseline: true,
     method: spec.method,
     ...(spec.method === 'olson' ? { fit: spec.fit ?? 'total' } : {}),
+    ...(spec.method === 'dcn'
+      ? {
+          ...(spec.iterations !== undefined ? { iterations: spec.iterations } : {}),
+          ...(spec.shapeAnchor !== undefined ? { shapeAnchor: spec.shapeAnchor } : {}),
+          ...(spec.cutoff !== undefined ? { cutoff: spec.cutoff } : {}),
+          ...(spec.damping !== undefined ? { damping: spec.damping } : {}),
+        }
+      : {}),
   } as CartogramOptions);
 
-  const kept = areaFeatures(before.featureCollection);
+  const kept = areaFeatures(result.baseline!);
   const gA = pack(kept);
   const gB = pack(areaFeatures(result.featureCollection));
 
