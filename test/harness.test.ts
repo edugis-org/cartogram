@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildScene, labelOf } from '../harness/scene.ts';
 import { DATASETS } from '../harness/datasets.ts';
-import { morph } from '../harness/render.ts';
+import { effectiveT, geometryAt, morph } from '../harness/render.ts';
 import { load, has, fc, squareFeature } from './helpers.ts';
 import type { Feature } from 'geojson';
 
@@ -40,6 +40,29 @@ describe('review harness scene', () => {
     const { scene } = buildScene(load(path), { value: 'value', method: 'olson', missing: 'drop' });
     expect(scene.a.length).toBe(scene.b.length);
     expect(scene.geomA.featCount).toBe(scene.labels.length);
+  });
+
+  it('always shows the cartogram for methods whose geometry cannot be morphed', () => {
+    // Regression: the morph slider is disabled for Dorling and Demers, but a disabled
+    // slider keeps the value it had under the previous method. Parked below the
+    // midpoint, it made those methods draw the original map instead of the symbols.
+    const input = fc([squareFeature('a', 0, 0, 10, 1), squareFeature('b', 20, 0, 10, 4)]);
+    const { scene } = buildScene(input, { value: 'value', method: 'dorling', projection: 'none' });
+    expect(scene.morphable).toBe(false);
+
+    for (const slider of [0, 0.2, 0.5, 1]) {
+      const t = effectiveT(scene, slider);
+      const out = new Float64Array(Math.max(scene.a.length, scene.b.length));
+      expect(Array.from(morph(scene, t, out).slice(0, scene.b.length))).toEqual(
+        Array.from(scene.b),
+      );
+      expect(geometryAt(scene, t)).toBe(scene.geomB);
+    }
+
+    // A morphable method still follows the slider exactly.
+    const { scene: warped } = buildScene(input, { value: 'value', method: 'olson', projection: 'none' });
+    expect(warped.morphable).toBe(true);
+    expect(effectiveT(warped, 0.3)).toBe(0.3);
   });
 
   it('morphs endpoints exactly and interpolates linearly in between', () => {

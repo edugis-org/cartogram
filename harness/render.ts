@@ -131,6 +131,19 @@ export function morph(scene: Scene, t: number, out: Float64Array): Float64Array 
   return out;
 }
 
+/**
+ * Morph position to actually draw the cartogram pane at.
+ *
+ * Methods that replace geometry cannot be morphed, and their slider is disabled -- but
+ * a disabled slider keeps whatever value it had under the previous method. Left alone,
+ * a slider parked below the midpoint made Dorling and Demers render the *original map*
+ * instead of the symbols. The cartogram pane always shows the cartogram; only the
+ * reference pane, which asks for t = 0 explicitly, shows the input.
+ */
+export function effectiveT(scene: Scene, slider: number): number {
+  return scene.morphable ? slider : 1;
+}
+
 /** Which index structure describes the coordinates `morph` returns for this t. */
 export function geometryAt(scene: Scene, t: number): FlatGeometry {
   if (scene.morphable) return t <= 0 ? scene.geomA : scene.geomB;

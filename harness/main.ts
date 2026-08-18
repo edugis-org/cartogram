@@ -2,7 +2,10 @@ import type { FeatureCollection } from 'geojson';
 import type { CartogramResult, MethodName, MissingPolicy, ProjectionName } from '../src/types.ts';
 import { buildScene } from './scene.ts';
 import { DATASETS } from './datasets.ts';
-import { draw, fitView, geometryAt, morph, pick, type DrawOptions, type Scene, type View } from './render.ts';
+import {
+  draw, effectiveT, fitView, geometryAt, morph, pick,
+  type DrawOptions, type Scene, type View,
+} from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -197,7 +200,7 @@ function options(t: number, role: DrawOptions['role']): DrawOptions {
 
 function render(): void {
   if (!scene) return;
-  const t = Number(els.morph.value);
+  const t = effectiveT(scene, Number(els.morph.value));
   const side = els.layout.value === 'side';
   els.stage.classList.toggle('single', !side);
   // Dorling and Demers replace geometry, so there is nothing to interpolate.
@@ -256,7 +259,7 @@ for (const c of [els.canvasA, els.canvasB]) {
     }
     if (!scene) return;
     const isB = c === els.canvasB;
-    const t = isB ? Number(els.morph.value) : 0;
+    const t = isB ? effectiveT(scene, Number(els.morph.value)) : 0;
     const coords = morph(scene, t, scratch);
     const found = pick(c.getContext('2d')!, geometryAt(scene, t), view, coords, x, y);
     if (found !== hover) {
