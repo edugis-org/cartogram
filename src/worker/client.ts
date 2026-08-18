@@ -38,7 +38,7 @@ export class CartogramWorker {
    *
    * ```ts
    * new CartogramWorker(() => new Worker(
-   *   new URL('cartogram-ts/worker', import.meta.url), { type: 'module' },
+   *   new URL('@edugis/cartogram/worker', import.meta.url), { type: 'module' },
    * ));
    * ```
    *

@@ -70,9 +70,9 @@ function buildApp(outDir: string): Plugin {
       writeFileSync(
         resolve(out, 'index.html'),
         '<!doctype html><meta charset="utf-8">' +
-          '<title>cartogram-ts</title>' +
+          '<title>cartogram</title>' +
           '<meta http-equiv="refresh" content="0; url=./harness/">' +
-          '<a href="./harness/">cartogram-ts review harness</a>\n',
+          '<a href="./harness/">cartogram review harness</a>\n',
       );
     },
   };

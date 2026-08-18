@@ -3,10 +3,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { cartogram } from './index.ts';
 import type { CartogramOptions, MethodName, MissingPolicy, ProjectionName } from './types.ts';
 
-const USAGE = `cartogram-ts - turn GeoJSON into a cartogram
+const USAGE = `cartogram - turn GeoJSON into a cartogram
 
 Usage:
-  cartogram-ts <input.geojson> --value <property> [options]
+  cartogram <input.geojson> --value <property> [options]
 
 Options:
   --value <prop>        property holding the cartogram variable (required)

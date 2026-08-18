@@ -1,4 +1,4 @@
-# Requirements — `cartogram-ts`
+# Requirements — `@edugis/cartogram`
 
 ## 1. Purpose
 

@@ -1,5 +1,5 @@
 {
-  "name": "cartogram-ts",
+  "name": "@edugis/cartogram",
   "version": "0.1.0",
   "description": "Turn GeoJSON into cartograms. Browser-compatible, dependency-free TypeScript.",
   "type": "module",
@@ -19,7 +19,7 @@
     }
   },
   "bin": {
-    "cartogram-ts": "./dist/cli.js"
+    "cartogram": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -56,11 +56,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anneb/cartogram-ts.git"
+    "url": "git+https://github.com/edugis/cartogram.git"
   },
-  "homepage": "https://github.com/anneb/cartogram-ts#readme",
+  "homepage": "https://github.com/edugis/cartogram#readme",
   "bugs": {
-    "url": "https://github.com/anneb/cartogram-ts/issues"
+    "url": "https://github.com/edugis/cartogram/issues"
   },
   "publishConfig": {
     "access": "public"

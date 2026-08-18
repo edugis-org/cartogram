@@ -1,4 +1,4 @@
-# Project plan — `cartogram-ts`
+# Project plan — `@edugis/cartogram`
 
 ## Guiding order
 
@@ -48,14 +48,14 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
 - `data/` fetch script + `data/SOURCES.md` with provenance/licence.
 - Flat-buffer geometry representation and GeoJSON round-trip, with a property test:
   *round-trip is lossless*.
-- **Exit:** `import { cartogram } from 'cartogram-ts'` works and returns input unchanged for `method: 'identity'`.
+- **Exit:** `import { cartogram } from '@edugis/cartogram'` works and returns input unchanged for `method: 'identity'`.
 
 ### M1 — Pipeline + Olson + metrics ✅ done
 - Value extraction, missing-value policies, equal-area projection step.
 - `olson` method (scale about centroid).
 - Metrics: area error (mean/max/percentiles), **compactness drift and boundary-detail
   retention (the anti-blob guard, F20a/F20b)**, runtime, vertex count.
-- CLI: `cartogram-ts run data/x.geojson --value pop --method olson -o out.geojson`.
+- CLI: `cartogram data/x.geojson --value pop --method olson -o out.geojson`.
 - **Exit:** Olson output has area error < 1e-9 on every dataset. That is a hard oracle.
   **Met:** ~1e-16 across all 15 datasets. Finding along the way: raw shoelace area on
   projected world coordinates (~1e7 m) loses ~9 significant digits to cancellation; areas
@@ -236,7 +236,7 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   over-relaxation to speed it up. Result: 0.37, 0.22, 0.37 ms per feature, and NUTS 3 from
   2446 ms to 685 ms with overlaps still exactly zero.
 - **Web Worker offload** shipped: `CartogramWorker` (exported) plus the worker entry at
-  `cartogram-ts/worker`. Progress and cancellation travel as messages, since functions and
+  `@edugis/cartogram/worker`. Progress and cancellation travel as messages, since functions and
   AbortSignals do not survive structured cloning. Cancelling supersedes a run without
   terminating the worker, so the next run does not pay to start one. The harness now runs
   every cartogram there and reports pass-by-pass progress instead of freezing.
@@ -257,7 +257,7 @@ Total ≈ 9–11 weeks of focused work; M0–M3 (~4 weeks) already produces a ge
 ## Public API sketch
 
 ```ts
-import { cartogram } from 'cartogram-ts';
+import { cartogram } from '@edugis/cartogram';
 
 const result = cartogram(featureCollection, {
   value: 'population',              // or (f) => number

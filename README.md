@@ -1,4 +1,4 @@
-# cartogram-ts
+# @edugis/cartogram
 
 Turn GeoJSON into cartograms. TypeScript, browser-compatible, **zero runtime dependencies**.
 
@@ -8,7 +8,7 @@ end to end on real data. Runs off the main thread in a Web Worker, with a
 committed benchmark suite. Remaining: robustness and release (M7).
 
 ```ts
-import { cartogram } from 'cartogram-ts';
+import { cartogram } from '@edugis/cartogram';
 
 const result = cartogram(featureCollection, {
   method: 'flow',         // 'identity' | 'olson' | 'dcn' | 'flow' | 'dorling' | 'demers'
@@ -86,7 +86,7 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
 A flow cartogram takes seconds, which is a frozen page if it runs where the UI does.
 
 ```ts
-import { CartogramWorker } from 'cartogram-ts';
+import { CartogramWorker } from '@edugis/cartogram';
 
 const worker = new CartogramWorker();
 const result = await worker.run(featureCollection, { method: 'flow', value: 'pop' }, {
@@ -100,7 +100,7 @@ when they can see a literal `new URL(...)` at the call site:
 
 ```ts
 new CartogramWorker(() => new Worker(
-  new URL('cartogram-ts/worker', import.meta.url), { type: 'module' },
+  new URL('@edugis/cartogram/worker', import.meta.url), { type: 'module' },
 ));
 ```
 
