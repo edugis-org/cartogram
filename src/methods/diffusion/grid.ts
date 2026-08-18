@@ -77,6 +77,11 @@ export function buildDensityGrid(
     if (f >= 0) cellCount[f]!++;
   }
 
+  // Safety net only: callers are expected to have floored their values already (the
+  // flow driver does), but a zero density here would divide by zero in the velocity
+  // field, so nothing is allowed to reach it.
+  const densityFloor = meanDensity * 1e-6;
+
   const rho = new Float64Array(size * size);
   let sea = 0;
   for (let i = 0; i < owner.length; i++) {
@@ -86,7 +91,8 @@ export function buildDensityGrid(
       sea++;
     } else {
       const cells = cellCount[f]!;
-      rho[i] = cells > 0 ? values[f]! / (cells * cell * cell) : meanDensity;
+      const d = cells > 0 ? values[f]! / (cells * cell * cell) : meanDensity;
+      rho[i] = Math.max(d, densityFloor);
     }
   }
 

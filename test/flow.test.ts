@@ -129,3 +129,46 @@ describe('flow on real data', () => {
     },
   );
 });
+
+describe('degenerate values do not destroy the map', () => {
+  it('a zero-valued region shrinks hard but stays finite', () => {
+    // Regression. The velocity is -grad(rho)/rho, so a region with density near zero
+    // divides by near zero: with `missing: 'zero'` on NUTS 3 the Western Isles grew by
+    // a factor of 296765 and flattened the rest of the map into a single line.
+    const input = fc([
+      squareFeature('a', 0, 0, 1, 0),
+      squareFeature('b', 1, 0, 1, 5),
+      squareFeature('c', 0, 1, 1, 5),
+      squareFeature('d', 1, 1, 1, 5),
+    ]);
+    const r = cartogram(input, {
+      method: 'flow',
+      value: 'value',
+      projection: 'none',
+      grid: 128,
+    } as never);
+
+    const ratios = r.diagnostics.map((d) => d.outputArea / d.inputArea);
+    for (const ratio of ratios) {
+      expect(ratio).toBeGreaterThan(1e-4); // nothing collapses to a point
+      expect(ratio).toBeLessThan(1e3); // and nothing is launched off the map
+    }
+    expect(ratios[0]!).toBeLessThan(1); // the worthless region does shrink
+  });
+
+  it('does not let a region shrink below what the grid can represent', () => {
+    // Flooring the rasterized density each pass instead of the value once compounds:
+    // the floor is re-applied to an already shrunken region every pass, which took the
+    // UK regions down by thirteen orders of magnitude rather than the intended amount.
+    const input = fc([
+      squareFeature('a', 0, 0, 1, 0),
+      squareFeature('b', 1, 0, 1, 1000),
+      squareFeature('c', 0, 1, 1, 1000),
+      squareFeature('d', 1, 1, 1, 1000),
+    ]);
+    const r = cartogram(input, {
+      method: 'flow', value: 'value', projection: 'none', grid: 128, runs: 10,
+    } as never);
+    expect(r.diagnostics[0]!.outputArea / r.diagnostics[0]!.inputArea).toBeGreaterThan(1e-4);
+  });
+});

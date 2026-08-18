@@ -64,14 +64,17 @@
               <select id="grid">
                 <option value="128">128 — fast, coarse</option>
                 <option value="256" selected>256</option>
-                <option value="512">512 — best quality, slow</option>
+                <option value="512">512 — high quality, slow</option>
+                <option value="1024">1024 — finest, very slow</option>
               </select>
             </label>
             <label>Passes <input type="number" id="runs" min="1" max="20" step="1" value="10" /></label>
             <label>Blur (first pass, cells) <input type="number" id="blur" min="0" max="16" step="0.5" value="4" /></label>
             <p class="note">
               Each pass re-rasterizes the current map and halves the blur. Small regions
-              need a finer grid: they are only as accurate as the cells they cover.
+              need a finer grid: they are only as accurate as the cells they cover, and a
+              region smaller than one cell can only be approximated. Watch the
+              under-resolved warning — for NUTS 3, 512 or 1024.
             </p>
           </div>
           <div id="dorling-params">

@@ -1,5 +1,5 @@
 import type { FlatGeometry } from '../../geometry/flat.ts';
-import { allFeatureAreas } from '../../geometry/area.ts';
+import { allFeatureAreas, bbox } from '../../geometry/area.ts';
 import { Dct, dct2Forward, dct2Inverse } from './dct.ts';
 import { buildDensityGrid } from './grid.ts';
 
@@ -98,7 +98,33 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
       underResolved: 0,
     };
   }
-  for (let f = 0; f < n; f++) target[f] = (areaSum * values[f]!) / valueSum;
+  // Floor the values once, here, rather than flooring the rasterized density each
+  // pass. A region worth nothing must shrink hard, but it cannot be allowed to become
+  // a singularity: the velocity is -grad(rho)/rho, so density near zero divides by
+  // near zero. With `missing: 'zero'` on NUTS 3 that sent the Western Isles up by a
+  // factor of 296765 and flattened the rest of the map into a line.
+  //
+  // Flooring the density per pass instead is not enough, and worse, it compounds: the
+  // floor is re-applied to an already shrunken region every pass, so the 181 UK
+  // regions with no Eurostat population collapsed by 13 orders of magnitude rather
+  // than the intended thousandfold. Flooring the value once gives every region a fixed
+  // target that successive passes converge to instead of chasing.
+  //
+  // The floor is one grid cell's worth of area, expressed as a value. Below that the
+  // grid simply cannot represent the region: it shrinks under a cell, gets handed a
+  // cell back so it appears in the field at all, is squeezed again next pass, and
+  // compounds away to nothing -- measured at 5e-14 of its original area for the UK
+  // regions, which is a point, not a polygon.
+  const [minX, minY, maxX, maxY] = bbox(g);
+  const cellArea = Math.pow((Math.max(maxX - minX, maxY - minY) * params.padding) / params.grid, 2);
+  const floorValue = areaSum > 0 ? (valueSum * cellArea) / areaSum : 0;
+  const effective = new Float64Array(n);
+  let effectiveSum = 0;
+  for (let f = 0; f < n; f++) {
+    effective[f] = Math.max(values[f]!, floorValue);
+    effectiveSum += effective[f]!;
+  }
+  for (let f = 0; f < n; f++) target[f] = (areaSum * effective[f]!) / effectiveSum;
 
   const size = params.grid;
   const dct = new Dct(size);
@@ -142,7 +168,7 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   for (let run = 0; run < params.runs && !converged; run++) {
     if (params.signal?.aborted) break;
 
-    const grid = buildDensityGrid(g, values, size, params.padding);
+    const grid = buildDensityGrid(g, effective, size, params.padding);
     seaFraction = grid.seaFraction;
     underResolved = grid.underResolved;
     const coeff = Float64Array.from(grid.rho);
@@ -251,12 +277,14 @@ function fieldAt(
 /**
  * v = -grad(rho) / rho, by central differences.
  *
- * The density is floored well above zero before dividing: rho appears in the
- * denominator, and a diffused field can dip very low over a large empty sea, which
- * would otherwise produce enormous spurious velocities there.
+ * The density is floored before dividing, relative to the mean (which normalization
+ * fixes at 1). rho is in the denominator, so wherever the field dips towards zero the
+ * velocity diverges and vertices are flung across the map. A floor of 1e-6 was far too
+ * permissive: it still allowed velocities a million times the typical one.
  */
 function velocity(rho: Float64Array, vx: Float64Array, vy: Float64Array, size: number): void {
-  const floor = 1e-6;
+  // Mean density is 1 after normalization, so this is a thousandth of typical.
+  const floor = 1e-3;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = y * size + x;
