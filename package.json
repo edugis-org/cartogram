@@ -12,6 +12,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker/cartogram.worker.d.ts",
+      "import": "./dist/worker/cartogram.worker.js"
     }
   },
   "bin": {
@@ -30,7 +34,8 @@
     "test:watch": "vitest",
     "cli": "npm run build && node dist/cli.js",
     "harness": "vite",
-    "harness:build": "vite build --outDir dist-harness"
+    "harness:build": "vite build --outDir dist-harness",
+    "bench": "npm run build && node bench/run.mjs"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.14",

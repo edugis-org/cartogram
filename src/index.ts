@@ -31,6 +31,8 @@ export { orientationPreservation } from './metrics/orientation.ts';
 export { laea, cylindricalEqualArea, chooseProjection } from './io/project.ts';
 export { densify, autoSpacing } from './topology/densify.ts';
 export { buildVertexIndex, sharedFraction } from './topology/vertices.ts';
+export { CartogramWorker } from './worker/client.ts';
+export type { WorkerOptions, WorkerRequest, WorkerResponse } from './worker/protocol.ts';
 
 /**
  * Turn a GeoJSON FeatureCollection into a cartogram: feature areas rescaled to be

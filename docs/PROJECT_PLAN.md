@@ -205,10 +205,46 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   cannot converge because the density field is built from the map's *current* shape, so
   each pass re-rasterizes and halves the blur.
 
-### M6 — Performance & scaling (1 week)
-- Benchmark suite over the LOD ladder (10²…10⁶ vertices; 12…1500 features).
-- Confirm empirically: runtime ≈ a·V + b·(G log G), i.e. **near-linear in feature count**.
-- Web Worker offload with transferable buffers; optional streaming progress.
+### M6 — Performance & scaling ✅ done
+- **Benchmark suite** committed as `bench/run.mjs` (`npm run bench`), writing
+  `bench/results.json` so later changes compare against a baseline rather than memory.
+- **N1 confirmed empirically.**
+
+  | vertices (25 features) | olson | dcn | flow (grid 128) |
+  |---:|---:|---:|---:|
+  | 100 | 0.2 ms | 23 ms | 311 ms |
+  | 800 | 1.5 ms | 28 ms | 310 ms |
+  | 6 400 | 7.8 ms | 39 ms | 334 ms |
+  | 51 200 | 74.9 ms | 314 ms | 701 ms |
+
+  | features (fixed detail) | olson | dorling | dcn | flow |
+  |---:|---:|---:|---:|---:|
+  | 100 | 1.0 ms | 19 ms | 30 ms | 294 ms |
+  | 400 | 3.7 ms | 73 ms | 148 ms | 380 ms |
+  | 1 600 | 10.6 ms | 581 ms | 383 ms | 562 ms |
+
+  Olson is linear in vertices (512x vertices, 375x time). The flow method is almost flat
+  in both, exactly as `a*V + b*(G log G)` predicts: its cost is the grid, which the user
+  chooses, not the data.
+- **Dorling was violating N1 and the benchmark caught it**: 0.43, 0.49, 1.61 ms per
+  feature at 100, 400, 1600 features. Two causes, both fixed. Sweep cost scaled with the
+  *largest* symbol, since every symbol searched a neighbourhood wide enough to reach it;
+  symbols far above the median are now handled separately, of which there are few by
+  definition. And the separation loop ran to a zero overlap *count*, which never
+  terminates on dense data -- it burned the full 1000-sweep cap on everything above a few
+  hundred symbols. It now stops on penetration *depth*, which falls monotonically, with
+  over-relaxation to speed it up. Result: 0.37, 0.22, 0.37 ms per feature, and NUTS 3 from
+  2446 ms to 685 ms with overlaps still exactly zero.
+- **Web Worker offload** shipped: `CartogramWorker` (exported) plus the worker entry at
+  `cartogram-ts/worker`. Progress and cancellation travel as messages, since functions and
+  AbortSignals do not survive structured cloning. Cancelling supersedes a run without
+  terminating the worker, so the next run does not pay to start one. The harness now runs
+  every cartogram there and reports pass-by-pass progress instead of freezing.
+- **Flow speedups**: a pass stops once the field is flat enough that vertices no longer
+  move (each step costs a full inverse cosine transform -- 14 s of a 17 s run at grid 512),
+  and passes stop when they no longer pay for themselves. NUTS 3 at grid 256 went from
+  4141 ms to about 1300 ms. Left undone: the adaptive Runge-Kutta of the 2018 paper, which
+  is the remaining lever on step count.
 
 ### M7 — Robustness & release (1 week)
 - Fuzz/property tests: holes, exclaves, antimeridian, degenerate slivers, zero/negative values,

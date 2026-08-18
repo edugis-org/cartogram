@@ -32,6 +32,9 @@ export interface DorlingParams {
   signal?: AbortSignal | undefined;
 }
 
+/** Over-relaxation factor for the separation sweeps. 1 = plain Gauss-Seidel. */
+const OVER_RELAX = 1.5;
+
 export const DORLING_DEFAULTS: DorlingParams = {
   shape: 'circle',
   iterations: 200,
@@ -48,6 +51,8 @@ export interface DorlingReport {
   iterations: number;
   /** Pairs still overlapping when relaxation stopped. Should be 0. */
   overlaps: number;
+  /** Separation sweeps needed to clear the overlaps. Cost driver; watch it scale. */
+  sweeps: number;
   converged: boolean;
 }
 
@@ -203,23 +208,30 @@ export function dorling(
   // sweeps: dense datasets (NUTS 3 has 1333 symbols) need far more sweeps than sparse
   // ones, and a fixed cap silently leaves hundreds of overlaps on exactly the maps
   // where overlaps are hardest to see.
-  // Sweep until nothing overlaps. The count reported by a sweep is what it found
-  // *before* correcting, so it plateaus for a while even as the arrangement keeps
-  // improving; stopping on a stalled count was tried and quit early, leaving ~400
-  // overlaps on NUTS 3. A sweep is about a millisecond at that size, so simply
-  // running to zero is affordable.
-  let overlaps = 0;
-  for (let extra = 0; extra < 1000; extra++) {
-    overlaps = separate(x, y, collision);
-    if (overlaps === 0) break;
+  // Sweep until nothing meaningfully overlaps. The stopping test is the deepest
+  // penetration, not the number of overlapping pairs: the count plateaus while the
+  // arrangement is still improving, so stopping on it quits early (it left ~400
+  // overlaps on NUTS 3), while running to a zero count never terminates on dense data
+  // and burned the full 1000-sweep cap on every dataset larger than a few hundred
+  // symbols. Depth falls monotonically and is what actually matters visually.
+  // Matched to the epsilon `countOverlaps` uses, so "converged" and "no overlaps"
+  // mean the same thing. A looser depth tolerance leaves sub-visible penetrations that
+  // still count as overlaps, which turns the method's one hard guarantee into a
+  // near-miss.
+  const tolerance = median(collision) * 1e-7;
+  let sweeps = 0;
+  for (let extra = 0; extra < 400; extra++) {
+    sweeps++;
+    if (separate(x, y, collision) <= tolerance) break;
   }
-  overlaps = countOverlaps(x, y, collision, params);
+  const overlaps = countOverlaps(x, y, collision, params);
 
   return {
     geometry: build(g, x, y, radius, params),
     targetAreas: target,
     iterations,
     overlaps,
+    sweeps,
     converged,
   };
 }
@@ -337,16 +349,54 @@ function separate(x: Float64Array, y: Float64Array, radius: Float64Array): numbe
   // Size cells by the *median* symbol, not the largest. Symbol sizes span orders of
   // magnitude on real data (one metropolitan region dwarfs a rural one), and sizing
   // the grid for the largest collapses it to a handful of cells holding everything,
-  // which makes each sweep quadratic. Each symbol then searches a number of cells
-  // proportional to its own size plus the largest, so correctness is unchanged.
-  const cell = Math.max(2 * median(radius), 1e-9);
+  // which makes each sweep quadratic.
+  const med = median(radius);
+  const cell = Math.max(2 * med, 1e-9);
   const g = buildGrid(x, y, cell);
-  const rmax = maxOf(radius);
   const span = Math.min(g.cw, g.ch);
-  let found = 0;
+
+  // Symbols far larger than the median are handled separately. Otherwise every symbol
+  // has to search a neighbourhood wide enough to reach the biggest one, which makes
+  // the sweep cost scale with the largest symbol rather than with local density: the
+  // measured effect was 0.43 ms per feature at 100 features against 1.61 at 1600.
+  const big: number[] = [];
+  const bigCut = Math.max(4 * med, 1e-12);
+  for (let i = 0; i < n; i++) if (radius[i]! > bigCut) big.push(i);
+
+  let deepest = 0;
+  const push = (i: number, j: number): void => {
+    const ri = radius[i]!;
+    const rj = radius[j]!;
+    // A zero-area symbol is invisible and cannot meaningfully overlap anything.
+    // Left in, such symbols are shoved around forever by their neighbours and the
+    // sweeps never converge, which is exactly what happened with `missing: 'zero'`.
+    if (ri <= 0 || rj <= 0) return;
+    const vx = x[j]! - x[i]!;
+    const vy = y[j]! - y[i]!;
+    const want = ri + rj;
+    const d = Math.hypot(vx, vy);
+    if (d >= want) return;
+    const penetration = want - d;
+    if (penetration > deepest) deepest = penetration;
+    if (d === 0) {
+      // Coincident symbols: separate deterministically rather than dividing by zero.
+      x[i]! -= want / 2;
+      x[j]! += want / 2;
+      return;
+    }
+    // Over-relaxation: correct by a little more than half the penetration each. Plain
+    // Gauss-Seidel converges slowly once symbols are densely packed, because each
+    // correction is immediately partly undone by the next contact.
+    const shift = (OVER_RELAX * penetration) / d / 2;
+    x[i]! -= vx * shift;
+    y[i]! -= vy * shift;
+    x[j]! += vx * shift;
+    y[j]! += vy * shift;
+  };
 
   for (let i = 0; i < n; i++) {
-    const reach = Math.max(1, Math.ceil((radius[i]! + rmax) / span));
+    if (radius[i]! <= 0) continue;
+    const reach = Math.max(1, Math.ceil((radius[i]! + bigCut) / span));
     const col = Math.min(g.cols - 1, Math.max(0, Math.floor((x[i]! - g.minX) / g.cw)));
     const row = Math.min(g.rows - 1, Math.max(0, Math.floor((y[i]! - g.minY) / g.ch)));
     for (let dr = -reach; dr <= reach; dr++) {
@@ -359,29 +409,18 @@ function separate(x: Float64Array, y: Float64Array, radius: Float64Array): numbe
         for (let k = g.start[cellIndex]!; k < g.start[cellIndex + 1]!; k++) {
           const j = g.order[k]!;
           if (j <= i) continue;
-          const vx = x[j]! - x[i]!;
-          const vy = y[j]! - y[i]!;
-          const want = radius[i]! + radius[j]!;
-          const d = Math.hypot(vx, vy);
-          if (d >= want) continue;
-          found++;
-          if (d === 0) {
-            // Coincident symbols: separate deterministically rather than dividing by
-            // zero. Identical centroids do occur (a feature and its own enclave).
-            x[i]! -= want / 2;
-            x[j]! += want / 2;
-            continue;
-          }
-          const shift = (want - d) / d / 2;
-          x[i]! -= vx * shift;
-          y[i]! -= vy * shift;
-          x[j]! += vx * shift;
-          y[j]! += vy * shift;
+          push(i, j);
         }
       }
     }
   }
-  return found;
+
+  // Large symbols against everything, directly. There are few of them by definition.
+  for (const b of big) {
+    for (let i = 0; i < n; i++) if (i !== b) push(Math.min(i, b), Math.max(i, b));
+  }
+
+  return deepest;
 }
 
 function countOverlaps(

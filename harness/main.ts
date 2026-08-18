@@ -1,6 +1,7 @@
 import type { FeatureCollection } from 'geojson';
 import type { CartogramResult, MethodName, MissingPolicy, ProjectionName } from '../src/types.ts';
-import { buildScene } from './scene.ts';
+import { runOptions, sceneFromResult, type RunSpec } from './scene.ts';
+import { CartogramWorker } from '../src/worker/client.ts';
 import { DATASETS } from './datasets.ts';
 import {
   draw, effectiveT, fitView, geometryAt, morph, pick,
@@ -47,6 +48,12 @@ const els = {
 };
 
 const cache = new Map<string, FeatureCollection>();
+// Runs go to a worker: a flow cartogram at grid 512 takes seconds, and on the main
+// thread that is a frozen page with no way to tell whether it is working or hung.
+const worker = new CartogramWorker(
+  () => new Worker(new URL('../src/worker/cartogram.worker.ts', import.meta.url), { type: 'module' }),
+);
+let inFlight: AbortController | undefined;
 let scene: Scene | null = null;
 let result: CartogramResult | null = null;
 let view: View = { scale: 1, tx: 0, ty: 0 };
@@ -87,27 +94,46 @@ async function run(): Promise<void> {
   const fc = await loadDataset(spec.url);
   els.note.textContent = spec.note ?? '';
 
+  // Supersede any run still going: changing a parameter mid-run should not queue up
+  // work whose result nobody wants.
+  inFlight?.abort();
+  const controller = new AbortController();
+  inFlight = controller;
+
+  const runSpec: RunSpec = {
+    value: els.attribute.value,
+    method: els.method.value as MethodName,
+    fit: els.fit.value as 'total' | 'max',
+    projection: els.projection.value as ProjectionName,
+    missing: els.missing.value as MissingPolicy,
+    iterations: Number(els.iterations.value),
+    shapeAnchor: Number(els.shapeAnchor.value),
+    cutoff: Number(els.cutoff.value),
+    damping: Number(els.damping.value),
+    fill: Number(els.fill.value),
+    grid: Number(els.grid.value),
+    runs: Number(els.runs.value),
+    blur: Number(els.blur.value),
+  };
+
   const t0 = performance.now();
+  els.status.textContent = `computing ${runSpec.method}…`;
   try {
-    const built = buildScene(fc, {
-      value: els.attribute.value,
-      method: els.method.value as MethodName,
-      fit: els.fit.value as 'total' | 'max',
-      projection: els.projection.value as ProjectionName,
-      missing: els.missing.value as MissingPolicy,
-      iterations: Number(els.iterations.value),
-      shapeAnchor: Number(els.shapeAnchor.value),
-      cutoff: Number(els.cutoff.value),
-      damping: Number(els.damping.value),
-      fill: Number(els.fill.value),
-      grid: Number(els.grid.value),
-      runs: Number(els.runs.value),
-      blur: Number(els.blur.value),
+    const computed = await worker.run(fc, runOptions(runSpec) as never, {
+      signal: controller.signal,
+      onProgress: (iteration, meanError) => {
+        if (controller.signal.aborted) return;
+        els.status.textContent =
+          `${runSpec.method}: pass ${iteration}, area error ${(meanError * 100).toFixed(2)}%`;
+      },
     });
+    if (controller.signal.aborted) return;
+    const built = sceneFromResult(computed, runSpec);
     scene = built.scene;
     result = built.result;
     scratch = new Float64Array(Math.max(built.scene.a.length, built.scene.b.length));
   } catch (e) {
+    if (controller.signal.aborted) return;
     els.status.textContent = `error: ${(e as Error).message}`;
     els.metrics.textContent = '—';
     scene = null;

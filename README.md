@@ -2,9 +2,10 @@
 
 Turn GeoJSON into cartograms. TypeScript, browser-compatible, **zero runtime dependencies**.
 
-Status: **M0–M5 complete.** The pipeline, five cartogram methods including the flow-based
+Status: **M0–M6 complete.** The pipeline, five cartogram methods including the flow-based
 one that is the quality target, the metric suite and the human review harness all work
-end to end on real data. Remaining: performance work and hardening (M6, M7).
+end to end on real data. Runs off the main thread in a Web Worker, with a
+committed benchmark suite. Remaining: robustness and release (M7).
 
 ```ts
 import { cartogram } from 'cartogram-ts';
@@ -79,6 +80,40 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   azimuthal for regional maps, Lambert cylindrical for near-global ones, auto-selected.
   Cartograms are about area, so this is a correctness requirement, not a nicety.
 - **57 tests**, including the M1 exit criterion run over all 15 datasets in `data/`.
+
+## Off the main thread
+
+A flow cartogram takes seconds, which is a frozen page if it runs where the UI does.
+
+```ts
+import { CartogramWorker } from 'cartogram-ts';
+
+const worker = new CartogramWorker();
+const result = await worker.run(featureCollection, { method: 'flow', value: 'pop' }, {
+  onProgress: (pass, meanError) => console.log(pass, meanError),
+  signal: abortController.signal,
+});
+```
+
+Bundler users should pass their own worker factory — bundlers only rewrite worker URLs
+when they can see a literal `new URL(...)` at the call site:
+
+```ts
+new CartogramWorker(() => new Worker(
+  new URL('cartogram-ts/worker', import.meta.url), { type: 'module' },
+));
+```
+
+## Benchmarks
+
+```
+npm run bench     # writes bench/results.json
+```
+
+Scaling is near-linear as required: Olson is linear in vertices (512× vertices, 375×
+time), and the flow method is almost flat in both vertex and feature count, because its
+cost is the grid you choose rather than the data you give it. See
+[`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) for the tables.
 
 ## Review harness
 

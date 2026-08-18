@@ -1,9 +1,9 @@
 import type { Feature, FeatureCollection } from 'geojson';
 import { cartogram, pack, adjacency as adjacencyPairs } from '../src/index.ts';
+import type { CartogramOptions } from '../src/types.ts';
 import { allFeatureAreas } from '../src/geometry/area.ts';
 import type {
   AreaFeature,
-  CartogramOptions,
   CartogramResult,
   MethodName,
   MissingPolicy,
@@ -55,8 +55,9 @@ export function labelOf(f: Feature, i: number): string {
  * DOM-free on purpose, so the harness's own logic is covered by the test suite
  * rather than only by looking at it.
  */
-export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene; result: CartogramResult } {
-  const result = cartogram(fc, {
+/** The options for one review run. Shared by the direct and worker code paths. */
+export function runOptions(spec: RunSpec): CartogramOptions {
+  return {
     value: spec.value,
     projection: spec.projection ?? 'auto',
     missing: spec.missing ?? 'zero',
@@ -86,8 +87,18 @@ export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene
           ...(spec.damping !== undefined ? { damping: spec.damping } : {}),
         }
       : {}),
-  } as CartogramOptions);
+  } as CartogramOptions;
+}
 
+export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene; result: CartogramResult } {
+  return sceneFromResult(cartogram(fc, runOptions(spec)), spec);
+}
+
+/** Assemble the renderer's view of a finished run. */
+export function sceneFromResult(
+  result: CartogramResult,
+  spec: RunSpec,
+): { scene: Scene; result: CartogramResult } {
   const kept = areaFeatures(result.baseline!);
   const gA = pack(kept);
   const gB = pack(areaFeatures(result.featureCollection));

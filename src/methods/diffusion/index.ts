@@ -114,6 +114,7 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   let meanError = errorOf(allFeatureAreas(g), target);
   let converged = meanError <= params.targetError;
   let steps = 0;
+  let stalled = 0;
   let seaFraction = 0;
   let lastTime = 0;
 
@@ -160,23 +161,47 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
       fieldAt(coeff, rho, size, dct, k2, t + dt / 2, scratch);
       velocity(rho, vx, vy, size);
 
+      let maxMove = 0;
       for (let v = 0; v < vertexCount; v++) {
         const [ux, uy] = sample(vx, vy, size, px[v]!, py[v]!);
         const midX = px[v]! + ux * dt;
         const midY = py[v]! + uy * dt;
         const [wx, wy] = sample(vx, vy, size, midX, midY);
-        px[v]! += ((ux + wx) / 2) * dt;
-        py[v]! += ((uy + wy) / 2) * dt;
+        const mx = ((ux + wx) / 2) * dt;
+        const my = ((uy + wy) / 2) * dt;
+        px[v]! += mx;
+        py[v]! += my;
+        const move = Math.abs(mx) + Math.abs(my);
+        if (move > maxMove) maxMove = move;
       }
       t += dt;
       steps++;
+      // Once the field is flat the remaining steps move nothing, and each one costs a
+      // full inverse cosine transform -- the dominant expense of the whole method
+      // (14 s of a 17 s run at grid 512). A thousandth of a cell is far below anything
+      // visible.
+      if (maxMove < 1e-3) break;
     }
     lastTime = t;
 
     applyToGeometry(g, px, py, grid);
+    const previous = meanError;
     meanError = errorOf(allFeatureAreas(g), target);
     params.onIteration?.(run + 1, meanError);
     if (meanError <= params.targetError) converged = true;
+
+    // Stop when passes stop paying for themselves. Some maps plateau well above the
+    // target -- small regions are limited by how many grid cells they cover, not by
+    // how long the flow runs -- and grinding out the remaining passes only costs time.
+    // The threshold has to be strict. At 2% improvement per pass this cut the Dutch
+    // provinces off at 1.02% error when two more passes would have reached 0.60%:
+    // passes that look marginal individually still compound.
+    if (previous > 0 && meanError > previous * 0.999) {
+      stalled++;
+      if (stalled >= 3) break;
+    } else {
+      stalled = 0;
+    }
   }
 
   return {

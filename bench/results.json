@@ -1,0 +1,300 @@
+{
+  "generated": "2026-08-18T22:46:40.586Z",
+  "node": "v20.20.2",
+  "sections": {
+    "real": [
+      {
+        "dataset": "nl-provinces",
+        "method": "olson",
+        "features": 12,
+        "vertices": 1608,
+        "ms": 5.6,
+        "areaError": 4.73481560575449e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nl-provinces",
+        "method": "dorling",
+        "features": 12,
+        "vertices": 768,
+        "ms": 5.5,
+        "areaError": 2.232637040995353e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nl-provinces",
+        "method": "dcn",
+        "features": 12,
+        "vertices": 5389,
+        "ms": 53.1,
+        "areaError": 0.018720062891242104,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nl-provinces",
+        "method": "flow",
+        "features": 12,
+        "vertices": 5389,
+        "ms": 1374.3,
+        "areaError": 0.009980369530344162,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nuts0",
+        "method": "olson",
+        "features": 36,
+        "vertices": 6101,
+        "ms": 9.9,
+        "areaError": 7.123974150093066e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nuts0",
+        "method": "dorling",
+        "features": 36,
+        "vertices": 2304,
+        "ms": 13.4,
+        "areaError": 7.136532152601235e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nuts0",
+        "method": "dcn",
+        "features": 36,
+        "vertices": 6398,
+        "ms": 116.7,
+        "areaError": 0.05890971677607791,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nuts0",
+        "method": "flow",
+        "features": 36,
+        "vertices": 6398,
+        "ms": 3744.4,
+        "areaError": 0.09267497404863885,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nl-municipalities",
+        "method": "olson",
+        "features": 342,
+        "vertices": 6629,
+        "ms": 10.4,
+        "areaError": 4.172420450172849e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nl-municipalities",
+        "method": "dorling",
+        "features": 342,
+        "vertices": 21888,
+        "ms": 85.6,
+        "areaError": 6.101398779031355e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nl-municipalities",
+        "method": "dcn",
+        "features": 342,
+        "vertices": 18750,
+        "ms": 396.8,
+        "areaError": 0.11897605189577017,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nl-municipalities",
+        "method": "flow",
+        "features": 342,
+        "vertices": 18750,
+        "ms": 4134.3,
+        "areaError": 0.053556857209900124,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nuts2-20m",
+        "method": "olson",
+        "features": 292,
+        "vertices": 12007,
+        "ms": 19.1,
+        "areaError": 9.035560223617501e-16,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nuts2-20m",
+        "method": "dorling",
+        "features": 292,
+        "vertices": 18688,
+        "ms": 75.1,
+        "areaError": 1.2699136336748842e-15,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nuts2-20m",
+        "method": "dcn",
+        "features": 292,
+        "vertices": 12624,
+        "ms": 279.1,
+        "areaError": 0.14594582882376989,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nuts2-20m",
+        "method": "flow",
+        "features": 292,
+        "vertices": 12624,
+        "ms": 4045.3,
+        "areaError": 0.23435411032028364,
+        "topologyError": 0
+      },
+      {
+        "dataset": "world-110m",
+        "method": "olson",
+        "features": 177,
+        "vertices": 10365,
+        "ms": 15.7,
+        "areaError": 3.4764383986488616e-15,
+        "topologyError": 1
+      },
+      {
+        "dataset": "world-110m",
+        "method": "dorling",
+        "features": 177,
+        "vertices": 11328,
+        "ms": 44.9,
+        "areaError": 3.603591846217261e-15,
+        "topologyError": 1
+      },
+      {
+        "dataset": "world-110m",
+        "method": "dcn",
+        "features": 177,
+        "vertices": 14702,
+        "ms": 443.8,
+        "areaError": 0.2873092999717359,
+        "topologyError": 0
+      },
+      {
+        "dataset": "world-110m",
+        "method": "flow",
+        "features": 177,
+        "vertices": 14702,
+        "ms": 4146.4,
+        "areaError": 0.17287456677041635,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nuts3-20m",
+        "method": "olson",
+        "features": 1333,
+        "vertices": 20936,
+        "ms": 34.7,
+        "areaError": 2.274022341920831e-15,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nuts3-20m",
+        "method": "dorling",
+        "features": 1333,
+        "vertices": 85312,
+        "ms": 644.6,
+        "areaError": 2.843215423822385e-15,
+        "topologyError": 1
+      },
+      {
+        "dataset": "nuts3-20m",
+        "method": "dcn",
+        "features": 1333,
+        "vertices": 21825,
+        "ms": 843.8,
+        "areaError": 0.3785124747600511,
+        "topologyError": 0
+      },
+      {
+        "dataset": "nuts3-20m",
+        "method": "flow",
+        "features": 1333,
+        "vertices": 21825,
+        "ms": 1340.7,
+        "areaError": 0.5763220082290722,
+        "topologyError": 0
+      }
+    ],
+    "vertexScaling": [
+      {
+        "dataset": "lod-1e2",
+        "vertices": 100,
+        "olsonMs": 0.21,
+        "dcnMs": 23.4,
+        "flowMs": 310.6
+      },
+      {
+        "dataset": "lod-1e3",
+        "vertices": 800,
+        "olsonMs": 1.53,
+        "dcnMs": 27.7,
+        "flowMs": 309.6
+      },
+      {
+        "dataset": "lod-1e4",
+        "vertices": 6400,
+        "olsonMs": 7.85,
+        "dcnMs": 38.7,
+        "flowMs": 333.9
+      },
+      {
+        "dataset": "lod-1e5",
+        "vertices": 51200,
+        "olsonMs": 74.91,
+        "dcnMs": 313.8,
+        "flowMs": 701.1
+      }
+    ],
+    "featureScaling": [
+      {
+        "dataset": "grid 100",
+        "features": 100,
+        "vertices": 400,
+        "olsonMs": 0.96,
+        "dorlingMs": 18.7,
+        "dcnMs": 29.9,
+        "flowMs": 293.7
+      },
+      {
+        "dataset": "hex 400",
+        "features": 400,
+        "vertices": 2400,
+        "olsonMs": 3.7,
+        "dorlingMs": 73,
+        "dcnMs": 147.8,
+        "flowMs": 379.9
+      },
+      {
+        "dataset": "grid-large 1600",
+        "features": 1600,
+        "vertices": 6400,
+        "olsonMs": 10.6,
+        "dorlingMs": 580.6,
+        "dcnMs": 382.5,
+        "flowMs": 562.3
+      }
+    ],
+    "flowGrid": [
+      {
+        "grid": 128,
+        "ms": 424.8,
+        "areaError": 0.014468326049932834
+      },
+      {
+        "grid": 256,
+        "ms": 1270.1,
+        "areaError": 0.009980369530344162
+      },
+      {
+        "grid": 512,
+        "ms": 5129.8,
+        "areaError": 0.001991858922141206
+      }
+    ]
+  }
+}
