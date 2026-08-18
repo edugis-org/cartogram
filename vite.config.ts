@@ -16,6 +16,19 @@ function verdictStore(): Plugin {
   return {
     name: 'cartogram-verdicts',
     configureServer(server) {
+      // The app's entry lives at /harness/, so the dev root would otherwise 404.
+      // The production build writes a redirect file for the same reason; the dev
+      // server has no such file, so it needs the redirect here.
+      server.middlewares.use((req, res, next) => {
+        if (req.url === '/' || req.url === '') {
+          res.statusCode = 302;
+          res.setHeader('location', '/harness/');
+          res.end();
+          return;
+        }
+        next();
+      });
+
       server.middlewares.use('/__verdicts', (req, res) => {
         if (req.method === 'GET') {
           res.setHeader('content-type', 'application/json');

@@ -182,6 +182,12 @@ function showMetrics(r: CartogramResult): void {
       ),
     );
   }
+  if (m.selfIntersections !== undefined) {
+    parts.push(
+      metric('self-intersections', String(m.selfIntersections),
+        m.selfIntersections === 0 ? 'good' : 'bad'),
+    );
+  }
   if (m.orientation) {
     parts.push(
       metric('orientation', m.orientation.mean.toFixed(3), m.orientation.mean > 0.9 ? 'good' : 'bad'),

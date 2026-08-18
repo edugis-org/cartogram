@@ -353,7 +353,12 @@ function separate(x: Float64Array, y: Float64Array, radius: Float64Array): numbe
   const med = median(radius);
   const cell = Math.max(2 * med, 1e-9);
   const g = buildGrid(x, y, cell);
-  const span = Math.min(g.cw, g.ch);
+  // Guard the cell size. When the symbols are nearly collinear -- which happens on
+  // real input, e.g. two polar regions after an equal-area projection squashes them --
+  // one dimension of the extent collapses and the cell size with it. The search radius
+  // is measured in cells, so it then explodes and the sweep loops over astronomically
+  // many cells, almost all out of range: the run simply never returns.
+  const span = Math.max(Math.min(g.cw, g.ch), 1e-12);
 
   // Symbols far larger than the median are handled separately. Otherwise every symbol
   // has to search a neighbourhood wide enough to reach the biggest one, which makes
@@ -396,7 +401,11 @@ function separate(x: Float64Array, y: Float64Array, radius: Float64Array): numbe
 
   for (let i = 0; i < n; i++) {
     if (radius[i]! <= 0) continue;
-    const reach = Math.max(1, Math.ceil((radius[i]! + bigCut) / span));
+    // Never search beyond the grid: past that, every additional ring is empty.
+    const reach = Math.min(
+      Math.max(g.cols, g.rows),
+      Math.max(1, Math.ceil((radius[i]! + bigCut) / span)),
+    );
     const col = Math.min(g.cols - 1, Math.max(0, Math.floor((x[i]! - g.minX) / g.cw)));
     const row = Math.min(g.rows - 1, Math.max(0, Math.floor((y[i]! - g.minY) / g.ch)));
     for (let dr = -reach; dr <= reach; dr++) {

@@ -110,6 +110,10 @@ function main(argv: string[]): number {
       lines.push(`orientation rank correlation ${m.orientation.mean.toFixed(4)} ` +
         `(x ${m.orientation.x.toFixed(3)}, y ${m.orientation.y.toFixed(3)})`);
     }
+    if (m.selfIntersections !== undefined) {
+      lines.push(`validity   ${m.selfIntersections} self-intersecting boundary segments` +
+        (m.selfIntersections > 0 ? ' (some may be present in the input)' : ''));
+    }
     if (m.topology) lines.push(`topology   error ${m.topology.error.toFixed(4)} ` +
       `(${m.topology.sharedEdges}/${m.topology.inputEdges} adjacencies kept)`);
     if (m.shape) lines.push(

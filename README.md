@@ -137,6 +137,60 @@ npm run harness      # http://localhost:5174/harness/
 The harness's own logic (`harness/scene.ts`) is DOM-free and covered by the test suite,
 because a harness that misaligns the two maps would invalidate every judgement made with it.
 
+## Choosing a method
+
+No cartogram preserves area, shape and topology at once — that trade-off is the subject
+of the field's reference survey, and it is why this library ships several methods rather
+than one. Measured on the datasets in `data/`:
+
+| method | contiguous | shape | area error | notes |
+|---|---|---|---|---|
+| `flow` | yes | best of the contiguous methods | 0.2–9% | **the default choice.** Gastner–Seguy–More diffusion. Seconds, not milliseconds |
+| `dcn` | yes | rounds regions off; introduces self-intersections | 2–29% | force-based, ~100× faster than `flow` |
+| `olson` | no | **exact** | ~1e-14 | pure per-feature scaling; the correctness oracle |
+| `dorling` | no | circles | ~1e-13 | good for "which is biggest" questions |
+| `demers` | no | squares | ~1e-13 | as Dorling, squares tile better |
+
+Two honest caveats:
+
+- `dcn` introduces self-intersecting boundaries on real data (hundreds of segments on
+  NUTS 2). Damping reduces them but doubles the area error, so it is reported through
+  `metrics.selfIntersections` rather than silently traded away. Prefer `flow` unless you
+  need the speed.
+- `flow` is only as accurate as its grid: a region smaller than one grid cell can only be
+  approximated. When that happens the result carries a warning naming the count. For
+  NUTS 3-scale data use `grid: 1024`.
+
+## API
+
+```ts
+cartogram(featureCollection, options) => {
+  featureCollection,   // GeoJSON out, same order, ids and properties
+  baseline?,           // the projected, densified input (with includeBaseline)
+  diagnostics[],       // per feature: value, input/target/output area, error, rounding
+  metrics,             // area error, topology, orientation, shape, self-intersections
+  iteration?,          // convergence detail for iterative methods
+  warnings[],          // dropped features, substituted values, under-resolved features
+}
+```
+
+Common options: `value` (property name or accessor), `method`, `projection`
+(`auto` | `none` | `laea` | `cylindrical-equal-area`), `missing`
+(`error` | `zero` | `mean` | `drop`), `negative` (`error` | `clamp`), `unproject`,
+`densify`, `includeBaseline`, `metrics`.
+
+Per-method options are typed on the union member — `fit` for `olson`; `iterations`,
+`targetError`, `cutoff`, `damping`, `shapeAnchor`, `smoothing` for `dcn`; `grid`,
+`padding`, `runs`, `stepsPerRun`, `blur` for `flow`; `iterations`, `anchor`,
+`attraction`, `repulsion`, `fill`, `segments` for `dorling`/`demers`. Iterative methods
+also take `onIteration` and `signal`.
+
+### CLI
+
+```
+npx @edugis/cartogram data/real/nl-provinces.geojson --value POP_2021 --method flow -o out.geojson
+```
+
 ## Provenance
 
 No source code was copied from any cartogram implementation. Every file under `src/`

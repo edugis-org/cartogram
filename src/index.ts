@@ -20,6 +20,7 @@ import { cartographicError } from './metrics/area.ts';
 import { topologyError } from './metrics/topology.ts';
 import { shapePreservation } from './metrics/shape.ts';
 import { orientationPreservation } from './metrics/orientation.ts';
+import { selfIntersections } from './metrics/validity.ts';
 
 export * from './types.ts';
 export { pack, unpack } from './geometry/flat.ts';
@@ -28,6 +29,7 @@ export { cartographicError } from './metrics/area.ts';
 export { topologyError, adjacency } from './metrics/topology.ts';
 export { shapePreservation, compactness, featurePerimeter } from './metrics/shape.ts';
 export { orientationPreservation } from './metrics/orientation.ts';
+export { selfIntersections } from './metrics/validity.ts';
 export { laea, cylindricalEqualArea, chooseProjection } from './io/project.ts';
 export { densify, autoSpacing } from './topology/densify.ts';
 export { buildVertexIndex, sharedFraction } from './topology/vertices.ts';
@@ -204,6 +206,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   if (before) {
     metrics.topology = topologyError(before, packed);
     metrics.orientation = orientationPreservation(before, packed);
+    metrics.selfIntersections = selfIntersections(packed);
     const shape = shapePreservation(before, packed);
     perFeatureDrift = shape.compactnessDrift;
     // Anti-blob guard (F20a/F20b): compactness must not systematically rise.

@@ -224,6 +224,12 @@ export interface CartogramMetrics {
    * readable because the circles stay where the regions were.
    */
   orientation?: { x: number; y: number; mean: number };
+  /**
+   * Boundary segments that cross another segment of the same ring (F19). A warp can
+   * fold a boundary over itself, producing a polygon that is syntactically valid but
+   * geometrically nonsense. Should be 0; counting stops at 1000.
+   */
+  selfIntersections?: number;
   featureCount: number;
   vertexCount: number;
   /** Milliseconds spent inside cartogram(), excluding metric computation. */
