@@ -34,7 +34,7 @@ Before the first publish:
   scope is missing, create the organisation on npm first (free for public packages) and
   make sure your login is a member of it. Publishing a scoped package publicly needs
   `--access public`, which `publishConfig` already sets.
-- `repository`, `homepage` and `bugs` point at `github.com/edugis/cartogram`; correct them
+- `repository`, `homepage` and `bugs` point at `github.com/edugis-org/cartogram`; correct them
   if the repository lands somewhere else.
 - Decide the copyright holder in `LICENSE` (currently a personal name, not Geodan).
 - `npm version patch|minor|major` before publishing; it tags the commit.

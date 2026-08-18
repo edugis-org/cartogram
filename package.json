@@ -56,13 +56,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edugis/cartogram.git"
+    "url": "git+https://github.com/edugis-org/cartogram.git"
   },
-  "homepage": "https://github.com/edugis/cartogram#readme",
+  "homepage": "https://github.com/edugis-org/cartogram#readme",
   "bugs": {
-    "url": "https://github.com/edugis/cartogram/issues"
+    "url": "https://github.com/edugis-org/cartogram/issues"
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "author": "EduGIS"
 }
