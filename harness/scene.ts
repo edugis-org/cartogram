@@ -21,6 +21,7 @@ export interface RunSpec {
   shapeAnchor?: number;
   cutoff?: number;
   damping?: number;
+  fill?: number;
 }
 
 export function areaFeatures(fc: FeatureCollection): AreaFeature[] {
@@ -61,6 +62,12 @@ export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene
     includeBaseline: true,
     method: spec.method,
     ...(spec.method === 'olson' ? { fit: spec.fit ?? 'total' } : {}),
+    ...(spec.method === 'dorling' || spec.method === 'demers'
+      ? {
+          ...(spec.iterations !== undefined ? { iterations: spec.iterations } : {}),
+          ...(spec.fill !== undefined ? { fill: spec.fill } : {}),
+        }
+      : {}),
     ...(spec.method === 'dcn'
       ? {
           ...(spec.iterations !== undefined ? { iterations: spec.iterations } : {}),
@@ -75,11 +82,19 @@ export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene
   const gA = pack(kept);
   const gB = pack(areaFeatures(result.featureCollection));
 
-  if (gA.coords.length !== gB.coords.length) {
+  // Methods that move geometry keep the vertex layout, so the two sides can be
+  // interpolated directly. Methods that *replace* geometry (Dorling, Demers) cannot
+  // be morphed: the renderer switches between the two instead. Silently interpolating
+  // mismatched buffers is the failure this check exists to prevent.
+  const replaces = spec.method === 'dorling' || spec.method === 'demers';
+  if (!replaces && gA.coords.length !== gB.coords.length) {
     throw new Error(
       `harness: geometry mismatch (${gA.coords.length} vs ${gB.coords.length} coordinates); ` +
         `the morph would misalign`,
     );
+  }
+  if (gA.featCount !== gB.featCount) {
+    throw new Error(`harness: feature count mismatch (${gA.featCount} vs ${gB.featCount})`);
   }
 
   const inAreas = allFeatureAreas(gA);
@@ -96,7 +111,9 @@ export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene
 
   return {
     scene: {
-      geom: gA,
+      geomA: gA,
+      geomB: gB,
+      morphable: !replaces,
       a: gA.coords,
       b: gB.coords,
       errors: Float64Array.from(result.diagnostics.map((d) => d.error)),

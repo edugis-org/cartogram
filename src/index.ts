@@ -14,9 +14,11 @@ import { extractValues } from './io/values.ts';
 import { chooseProjection, projectInPlace, unprojectInPlace } from './io/project.ts';
 import { olson } from './methods/olson.ts';
 import { dcn, DCN_DEFAULTS } from './methods/dcn.ts';
+import { dorling, DORLING_DEFAULTS } from './methods/dorling.ts';
 import { cartographicError } from './metrics/area.ts';
 import { topologyError } from './metrics/topology.ts';
 import { shapePreservation } from './metrics/shape.ts';
+import { orientationPreservation } from './metrics/orientation.ts';
 
 export * from './types.ts';
 export { pack, unpack } from './geometry/flat.ts';
@@ -24,6 +26,7 @@ export { featureArea, featureCentroid, allFeatureAreas, bbox } from './geometry/
 export { cartographicError } from './metrics/area.ts';
 export { topologyError, adjacency } from './metrics/topology.ts';
 export { shapePreservation, compactness, featurePerimeter } from './metrics/shape.ts';
+export { orientationPreservation } from './metrics/orientation.ts';
 export { laea, cylindricalEqualArea, chooseProjection } from './io/project.ts';
 export { densify, autoSpacing } from './topology/densify.ts';
 export { buildVertexIndex, sharedFraction } from './topology/vertices.ts';
@@ -70,7 +73,8 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
 
   // Densify before warping, never after: a long straight edge moved only at its
   // endpoints cuts through its neighbours (F20, Duncan & Gastner 2025). Methods that
-  // move whole features rigidly cannot bend an edge, so they skip it by default.
+  // move whole features rigidly, or replace their geometry outright, cannot bend an
+  // edge, so they skip it by default.
   const warps = options.method === 'dcn';
   const requested = options.densify ?? 'auto';
   const spacing =
@@ -115,6 +119,36 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
       };
       break;
     }
+    case 'dorling':
+    case 'demers': {
+      const report = dorling(packed, keptValues, {
+        shape: options.method === 'demers' ? 'square' : 'circle',
+        iterations: options.iterations ?? DORLING_DEFAULTS.iterations,
+        anchor: options.anchor ?? DORLING_DEFAULTS.anchor,
+        attraction: options.attraction ?? DORLING_DEFAULTS.attraction,
+        repulsion: options.repulsion ?? DORLING_DEFAULTS.repulsion,
+        segments: options.segments ?? DORLING_DEFAULTS.segments,
+        fill: options.fill ?? DORLING_DEFAULTS.fill,
+        onIteration: options.onIteration,
+        signal: options.signal,
+      });
+      // This method replaces the geometry rather than moving it, so the packed
+      // buffers are swapped wholesale. The metrics still work: they compare features,
+      // not vertices, and never assume both sides have the same vertex count.
+      packed = report.geometry;
+      targetAreas = report.targetAreas;
+      iteration = {
+        iterations: report.iterations,
+        meanError: 0,
+        converged: report.converged,
+        foldRetries: 0,
+        overlaps: report.overlaps,
+      };
+      if (report.overlaps > 0) {
+        warnings.push(`${report.overlaps} pairs still overlap after relaxation`);
+      }
+      break;
+    }
     default: {
       const exhaustive: never = options;
       throw new Error(`unknown method: ${JSON.stringify(exhaustive)}`);
@@ -136,6 +170,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
 
   if (before) {
     metrics.topology = topologyError(before, packed);
+    metrics.orientation = orientationPreservation(before, packed);
     const shape = shapePreservation(before, packed);
     // Anti-blob guard (F20a/F20b): compactness must not systematically rise.
     metrics.shape = {

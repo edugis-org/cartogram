@@ -2,15 +2,15 @@
 
 Turn GeoJSON into cartograms. TypeScript, browser-compatible, **zero runtime dependencies**.
 
-Status: **M0–M3 complete.** The pipeline, two cartogram methods (one non-contiguous, one
-contiguous), the metric suite and the human review harness work end to end on real data.
+Status: **M0–M4 complete.** The pipeline, four cartogram methods, the metric suite and the
+human review harness work end to end on real data.
 The flow-based method (Gastner-Seguy-More 2018), which is the quality target, is next.
 
 ```ts
 import { cartogram } from 'cartogram-ts';
 
 const result = cartogram(featureCollection, {
-  method: 'dcn',          // 'identity' | 'olson' | 'dcn'
+  method: 'dcn',          // 'identity' | 'olson' | 'dcn' | 'dorling' | 'demers'
   value: 'population',    // property name, or (feature, i) => number
   projection: 'auto',     // 'auto' | 'none' | 'laea' | 'cylindrical-equal-area'
   missing: 'error',       // 'error' | 'zero' | 'mean' | 'drop'
@@ -56,15 +56,18 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   Area error reaches ~2% on small compact maps and 12–35% on large or heavily skewed ones;
   that ceiling is the known limit of the force family and the reason the flow-based method
   is next. See `docs/PROJECT_PLAN.md` for the measured table.
+- **Dorling (1996) circles and Demers squares** — areas exact to floating point, zero
+  overlapping symbols on every dataset, relative position preserved (rank correlation
+  0.96–0.997). These discard shape entirely, so they are **opt-in and never the default**
+  (F20a), and the anti-blob metrics are left to report them honestly rather than being
+  suppressed.
 - **Topology-preserving line densification** (Duncan & Gastner 2025) before any warp, with
   shared edges subdivided into bit-identical points from both sides.
+- **Metrics**: cartographic error, adjacency Jaccard topology error, relative-position rank
+  correlation, and the anti-blob guard.
 - **Equal-area projections**, written from the formulas with exact inverses: Lambert
   azimuthal for regional maps, Lambert cylindrical for near-global ones, auto-selected.
   Cartograms are about area, so this is a correctness requirement, not a nicety.
-- **Metrics**: cartographic error with the literature's `max(o, w)` denominator, adjacency
-  Jaccard topology error, and the anti-blob guard — Polsby–Popper compactness drift plus
-  boundary-detail retention, which catch a method rounding regions into circles even when
-  its area error looks perfect.
 - **57 tests**, including the M1 exit criterion run over all 15 datasets in `data/`.
 
 ## Review harness

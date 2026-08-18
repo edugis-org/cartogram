@@ -2,7 +2,7 @@ import type { FeatureCollection } from 'geojson';
 import type { CartogramResult, MethodName, MissingPolicy, ProjectionName } from '../src/types.ts';
 import { buildScene } from './scene.ts';
 import { DATASETS } from './datasets.ts';
-import { draw, fitView, morph, pick, type DrawOptions, type Scene, type View } from './render.ts';
+import { draw, fitView, geometryAt, morph, pick, type DrawOptions, type Scene, type View } from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -15,6 +15,8 @@ const els = {
   fit: $<HTMLSelectElement>('fit'),
   fitRow: $('fit-row'),
   dcnParams: $('dcn-params'),
+  dorlingParams: $('dorling-params'),
+  fill: $<HTMLInputElement>('fill'),
   iterations: $<HTMLInputElement>('iterations'),
   shapeAnchor: $<HTMLInputElement>('shapeAnchor'),
   cutoff: $<HTMLInputElement>('cutoff'),
@@ -54,7 +56,9 @@ function runKey(): string {
     els.method.value === 'olson' ? els.fit.value : '-',
     els.method.value === 'dcn'
       ? `it${els.iterations.value} a${els.shapeAnchor.value} c${els.cutoff.value} d${els.damping.value}`
-      : '-',
+      : els.method.value === 'dorling' || els.method.value === 'demers'
+        ? `it${els.iterations.value} fill${els.fill.value}`
+        : '-',
     els.projection.value,
     els.missing.value,
   ].join(' | ');
@@ -86,10 +90,11 @@ async function run(): Promise<void> {
       shapeAnchor: Number(els.shapeAnchor.value),
       cutoff: Number(els.cutoff.value),
       damping: Number(els.damping.value),
+      fill: Number(els.fill.value),
     });
     scene = built.scene;
     result = built.result;
-    scratch = new Float64Array(built.scene.a.length);
+    scratch = new Float64Array(Math.max(built.scene.a.length, built.scene.b.length));
   } catch (e) {
     els.status.textContent = `error: ${(e as Error).message}`;
     els.metrics.textContent = '—';
@@ -105,7 +110,10 @@ async function run(): Promise<void> {
       'beforeend',
       `<div><span class="k">iterations</span><span class="${it.converged ? 'good' : 'bad'}">` +
         `${it.iterations}${it.converged ? ' (converged)' : ' (limit)'}</span></div>` +
-        `<div><span class="k">fold retries</span><span>${it.foldRetries}</span></div>`,
+        `<div><span class="k">fold retries</span><span>${it.foldRetries}</span></div>` +
+        (it.overlaps === undefined
+          ? ''
+          : `<div><span class="k">overlaps</span><span class="${it.overlaps === 0 ? 'good' : 'bad'}">${it.overlaps}</span></div>`),
     );
   }
   await showVerdictState();
@@ -134,6 +142,11 @@ function showMetrics(r: CartogramResult): void {
         `${m.topology.error.toFixed(3)} (${m.topology.sharedEdges}/${m.topology.inputEdges})`,
         m.topology.error < 0.05 ? 'good' : 'bad',
       ),
+    );
+  }
+  if (m.orientation) {
+    parts.push(
+      metric('orientation', m.orientation.mean.toFixed(3), m.orientation.mean > 0.9 ? 'good' : 'bad'),
     );
   }
   if (m.shape) {
@@ -171,6 +184,9 @@ function render(): void {
   const t = Number(els.morph.value);
   const side = els.layout.value === 'side';
   els.stage.classList.toggle('single', !side);
+  // Dorling and Demers replace geometry, so there is nothing to interpolate.
+  els.morph.disabled = !scene.morphable;
+  els.play.disabled = !scene.morphable;
   els.captionB.firstChild!.textContent = side ? 'cartogram' : t === 0 ? 'original map' : 'cartogram';
 
   if (side) {
@@ -224,8 +240,9 @@ for (const c of [els.canvasA, els.canvasB]) {
     }
     if (!scene) return;
     const isB = c === els.canvasB;
-    const coords = morph(scene, isB ? Number(els.morph.value) : 0, scratch);
-    const found = pick(c.getContext('2d')!, scene, view, coords, x, y);
+    const t = isB ? Number(els.morph.value) : 0;
+    const coords = morph(scene, t, scratch);
+    const found = pick(c.getContext('2d')!, geometryAt(scene, t), view, coords, x, y);
     if (found !== hover) {
       hover = found;
       render();
@@ -366,13 +383,15 @@ els.dataset.addEventListener('change', () => {
   void run();
 });
 function syncMethodControls(): void {
-  els.fitRow.style.display = els.method.value === 'olson' ? '' : 'none';
-  els.dcnParams.style.display = els.method.value === 'dcn' ? '' : 'none';
+  const m = els.method.value;
+  els.fitRow.style.display = m === 'olson' ? '' : 'none';
+  els.dcnParams.style.display = m === 'dcn' ? '' : 'none';
+  els.dorlingParams.style.display = m === 'dorling' || m === 'demers' ? '' : 'none';
 }
 
 for (const el of [
   els.attribute, els.missing, els.method, els.fit, els.projection,
-  els.iterations, els.shapeAnchor, els.cutoff, els.damping,
+  els.iterations, els.shapeAnchor, els.cutoff, els.damping, els.fill,
 ]) {
   el.addEventListener('change', () => {
     syncMethodControls();

@@ -121,9 +121,32 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   - Human verdicts: to be recorded in the harness, which now exposes the method and its
     parameters.
 
-### M4 — Dorling / Demers (0.5 week)
+### M4 — Dorling / Demers ✅ done
 - Circle/square sizing, quadtree collision relaxation, neighbour attraction.
-- **Exit:** world + NUTS-2 run in < 1 s, no overlaps, orientation correlation > 0.9.
+- **Exit criteria, measured** (`missing: 'drop'`, defaults):
+
+  | dataset | features | max area error | overlaps | orientation | time |
+  |---|---|---|---|---|---|
+  | nl-provinces | 12 | 5.8e-14% | 0 | 0.962 | 17 ms |
+  | nuts0 | 36 | 2.9e-13% | 0 | 0.983 | 36 ms |
+  | nuts2-20m | 292 | 8.0e-13% | 0 | 0.995 | 266 ms |
+  | nl-municipalities | 342 | 5.4e-13% | 0 | 0.995 | 338 ms |
+  | world-110m | 177 | 3.8e-11% | 0 | 0.972 | 271 ms |
+  | nuts3-20m | 1333 | 2.3e-12% | 0 | 0.997 | 2468 ms |
+
+  **All met**: world and NUTS 2 well under 1 s, zero overlaps everywhere, orientation
+  far above 0.9. Areas are exact to floating point, which required solving the polygon
+  circumradius so the drawn k-gon has the target area rather than the circle it is
+  inscribed in.
+- A `fill` factor (default 0.3) scales all symbols together. Circles whose areas sum to
+  the whole map area cannot be packed into it -- the densest circle packing fills 90.7%
+  of the plane and these symbols are additionally pinned near their true positions -- so
+  without it the relaxation can never clear the last overlaps. Relative areas, and hence
+  the area error, are untouched.
+- The anti-blob metrics (F20a) report a large positive compactness drift for these
+  methods and 100% of features rounder. That is correct and is left visible: these
+  methods discard shape by construction, which is exactly why F20a makes them opt-in
+  and never the default.
 
 ### M5 — Flow-based Gastner–Seguy–More (3–4 weeks, the main event)
 0. Reuse the densification pass from M3.

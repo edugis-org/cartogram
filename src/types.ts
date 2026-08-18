@@ -19,7 +19,7 @@ export type MissingPolicy = 'error' | 'zero' | 'mean' | 'drop';
 /** Planar working coordinate system. */
 export type ProjectionName = 'auto' | 'none' | 'laea' | 'cylindrical-equal-area';
 
-export type MethodName = 'identity' | 'olson' | 'dcn';
+export type MethodName = 'identity' | 'olson' | 'dcn' | 'dorling' | 'demers';
 
 export interface CommonOptions {
   /** Property name or accessor yielding the numeric cartogram variable. */
@@ -92,7 +92,34 @@ export interface DcnOptions extends CommonOptions {
   signal?: AbortSignal;
 }
 
-export type CartogramOptions = IdentityOptions | OlsonOptions | DcnOptions;
+/**
+ * Dorling (1996) circles / Demers squares. Shape is discarded entirely, so this is
+ * opt-in only and never a default (requirement F20a). Areas are exact; readability
+ * depends on relative position, which `metrics.orientation` measures.
+ */
+export interface DorlingOptions extends CommonOptions {
+  method: 'dorling' | 'demers';
+  /** Maximum relaxation iterations. Default 200. */
+  iterations?: number;
+  /** Pull back towards the region's true position, 0..1. Default 0.15. */
+  anchor?: number;
+  /** Pull originally-adjacent regions back into contact, 0..1. Default 0.3. */
+  attraction?: number;
+  /** Overlap resolution strength, 0..1. Default 1. */
+  repulsion?: number;
+  /** Vertices per circle. Default 64. Ignored for squares. */
+  segments?: number;
+  /**
+   * Total symbol area as a fraction of the map area. Default 0.3. Circles summing to
+   * the full map area cannot be packed into it, so relaxation would never clear the
+   * last overlaps. Relative areas, and therefore the area error, are unaffected.
+   */
+  fill?: number;
+  onIteration?: (iteration: number, maxMove: number) => void;
+  signal?: AbortSignal;
+}
+
+export type CartogramOptions = IdentityOptions | OlsonOptions | DcnOptions | DorlingOptions;
 
 /** Per-feature diagnostics, in the working (projected) plane. */
 export interface FeatureDiagnostic {
@@ -147,6 +174,13 @@ export interface CartogramMetrics {
     fractionRounder: number;
     meanDetailRetention: number;
   };
+  /**
+   * Relative-position preservation: Spearman rank correlation of feature centroids
+   * before and after, per axis. 1 means every region kept its north/south and
+   * east/west ordering. Decisive for the shape-abstracting methods, which are only
+   * readable because the circles stay where the regions were.
+   */
+  orientation?: { x: number; y: number; mean: number };
   featureCount: number;
   vertexCount: number;
   /** Milliseconds spent inside cartogram(), excluding metric computation. */
@@ -161,6 +195,8 @@ export interface IterationReport {
   converged: boolean;
   /** Times a step had to be halved because it would have folded a ring. */
   foldRetries: number;
+  /** Dorling/Demers: pairs still overlapping when relaxation stopped. */
+  overlaps?: number;
 }
 
 export interface CartogramResult {

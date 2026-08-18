@@ -10,7 +10,8 @@ Usage:
 
 Options:
   --value <prop>        property holding the cartogram variable (required)
-  --method <name>       identity | olson | dcn                 (default olson)
+  --method <name>       identity | olson | dcn | dorling | demers
+                                                              (default olson)
   --fit <total|max>     olson: preserve total area, or keep the largest region
                                                               (default total)
   --iterations <n>      dcn: maximum iterations                (default 60)
@@ -19,6 +20,9 @@ Options:
   --damping <x>         dcn: step size multiplier              (default 1)
   --shape-anchor <x>    dcn: anti-blob strength, 0..1          (default 0.25)
   --densify <x|off>     vertex spacing before warping          (default auto)
+  --fill <x>            dorling/demers: symbol area / map area  (default 0.3)
+  --anchor <x>          dorling/demers: pull to true position   (default 0.15)
+  --attraction <x>      dorling/demers: pull neighbours together(default 0.3)
   --projection <name>   auto | none | laea | cylindrical-equal-area (default auto)
   --missing <policy>    error | zero | mean | drop             (default error)
   --negative <policy>   error | clamp                          (default error)
@@ -53,6 +57,9 @@ function main(argv: string[]): number {
     ...(num('cutoff') !== undefined ? { cutoff: num('cutoff') } : {}),
     ...(num('damping') !== undefined ? { damping: num('damping') } : {}),
     ...(num('shape-anchor') !== undefined ? { shapeAnchor: num('shape-anchor') } : {}),
+    ...(num('fill') !== undefined ? { fill: num('fill') } : {}),
+    ...(num('anchor') !== undefined ? { anchor: num('anchor') } : {}),
+    ...(num('attraction') !== undefined ? { attraction: num('attraction') } : {}),
     ...(args.options.densify !== undefined
       ? { densify: args.options.densify === 'off' ? false : Number(args.options.densify) }
       : {}),
@@ -81,11 +88,17 @@ function main(argv: string[]): number {
       const it = result.iteration;
       lines.push(
         `iterations ${it.iterations} ${it.converged ? '(converged)' : '(stopped at limit)'}` +
-          `, ${it.foldRetries} fold retries`,
+          (it.overlaps === undefined
+            ? `, ${it.foldRetries} fold retries`
+            : `, ${it.overlaps} overlapping pairs`),
       );
     }
     if (m.densification) {
       lines.push(`densify    +${m.densification.inserted} vertices at spacing ${m.densification.spacing.toFixed(1)}`);
+    }
+    if (m.orientation) {
+      lines.push(`orientation rank correlation ${m.orientation.mean.toFixed(4)} ` +
+        `(x ${m.orientation.x.toFixed(3)}, y ${m.orientation.y.toFixed(3)})`);
     }
     if (m.topology) lines.push(`topology   error ${m.topology.error.toFixed(4)} ` +
       `(${m.topology.sharedEdges}/${m.topology.inputEdges} adjacencies kept)`);

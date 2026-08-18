@@ -23,10 +23,10 @@ describe('review harness scene', () => {
       });
 
       expect(scene.a.length).toBe(scene.b.length);
-      expect(scene.errors.length).toBe(scene.geom.featCount);
-      expect(scene.ratios.length).toBe(scene.geom.featCount);
-      expect(scene.labels.length).toBe(scene.geom.featCount);
-      expect(result.diagnostics.length).toBe(scene.geom.featCount);
+      expect(scene.errors.length).toBe(scene.geomA.featCount);
+      expect(scene.ratios.length).toBe(scene.geomA.featCount);
+      expect(scene.labels.length).toBe(scene.geomA.featCount);
+      expect(result.diagnostics.length).toBe(scene.geomA.featCount);
       expect(result.metrics.areaError.max).toBeLessThan(1e-9);
       for (const c of [scene.a, scene.b]) {
         for (let i = 0; i < c.length; i++) expect(Number.isFinite(c[i]!)).toBe(true);
@@ -39,7 +39,7 @@ describe('review harness scene', () => {
     if (!has(path)) return;
     const { scene } = buildScene(load(path), { value: 'value', method: 'olson', missing: 'drop' });
     expect(scene.a.length).toBe(scene.b.length);
-    expect(scene.geom.featCount).toBe(scene.labels.length);
+    expect(scene.geomA.featCount).toBe(scene.labels.length);
   });
 
   it('morphs endpoints exactly and interpolates linearly in between', () => {

@@ -8,12 +8,19 @@ export interface View {
 }
 
 export interface Scene {
-  /** Shared index structure; A and B have identical topology and vertex order. */
-  geom: FlatGeometry;
+  /** Index structure of the input geometry. */
+  geomA: FlatGeometry;
+  /** Index structure of the output. Differs when a method replaces geometry. */
+  geomB: FlatGeometry;
   /** Projected input coordinates. */
   a: Float64Array;
   /** Projected cartogram coordinates. */
   b: Float64Array;
+  /**
+   * Can the two sides be interpolated vertex by vertex? False for methods that
+   * replace geometry outright (Dorling, Demers), where a morph would be meaningless.
+   */
+  morphable: boolean;
   /** Per-feature cartographic error, for the choropleth. */
   errors: Float64Array;
   /** Per-feature output/input area ratio, for the grew/shrank choropleth. */
@@ -87,12 +94,11 @@ function featureFill(scene: Scene, f: number, mode: DrawOptions['choropleth']): 
 
 function tracePath(
   ctx: CanvasRenderingContext2D,
-  scene: Scene,
+  g: FlatGeometry,
   f: number,
   coords: Float64Array,
   view: View,
 ): void {
-  const g = scene.geom;
   ctx.beginPath();
   for (let p = g.featStart[f]!; p < g.featStart[f + 1]!; p++) {
     for (let r = g.polyStart[p]!; r < g.polyStart[p + 1]!; r++) {
@@ -111,10 +117,17 @@ function tracePath(
 /** Interpolated coordinates for the morph slider. Allocation is reused by the caller. */
 export function morph(scene: Scene, t: number, out: Float64Array): Float64Array {
   const { a, b } = scene;
+  if (!scene.morphable) return t < 0.5 ? a : b;
   if (t <= 0) out.set(a);
   else if (t >= 1) out.set(b);
   else for (let i = 0; i < a.length; i++) out[i] = a[i]! + (b[i]! - a[i]!) * t;
   return out;
+}
+
+/** Which index structure describes the coordinates `morph` returns for this t. */
+export function geometryAt(scene: Scene, t: number): FlatGeometry {
+  if (scene.morphable) return t <= 0 ? scene.geomA : scene.geomB;
+  return t < 0.5 ? scene.geomA : scene.geomB;
 }
 
 export function draw(
@@ -128,14 +141,14 @@ export function draw(
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const coords = morph(scene, opts.t, scratch);
-  const g = scene.geom;
+  const g = geometryAt(scene, opts.t);
 
   // Ghost: the original outline, so distortion is readable at a glance.
   if (opts.ghost && opts.t > 0) {
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(226, 232, 240, 0.28)';
-    for (let f = 0; f < g.featCount; f++) {
-      tracePath(ctx, scene, f, scene.a, view);
+    for (let f = 0; f < scene.geomA.featCount; f++) {
+      tracePath(ctx, scene.geomA, f, scene.a, view);
       ctx.stroke();
     }
   }
@@ -143,14 +156,14 @@ export function draw(
   ctx.lineWidth = 0.7;
   ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
   for (let f = 0; f < g.featCount; f++) {
-    tracePath(ctx, scene, f, coords, view);
+    tracePath(ctx, g, f, coords, view);
     ctx.fillStyle = featureFill(scene, f, opts.choropleth);
     ctx.fill('evenodd');
     ctx.stroke();
   }
 
-  if (opts.hover !== null && opts.hover >= 0) {
-    tracePath(ctx, scene, opts.hover, coords, view);
+  if (opts.hover !== null && opts.hover >= 0 && opts.hover < g.featCount) {
+    tracePath(ctx, g, opts.hover, coords, view);
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#fbbf24';
     ctx.stroke();
@@ -191,14 +204,14 @@ export function draw(
 /** Feature under the cursor, or null. Uses the browser's own point-in-path test. */
 export function pick(
   ctx: CanvasRenderingContext2D,
-  scene: Scene,
+  g: FlatGeometry,
   view: View,
   coords: Float64Array,
   px: number,
   py: number,
 ): number | null {
-  for (let f = scene.geom.featCount - 1; f >= 0; f--) {
-    tracePath(ctx, scene, f, coords, view);
+  for (let f = g.featCount - 1; f >= 0; f--) {
+    tracePath(ctx, g, f, coords, view);
     if (ctx.isPointInPath(px, py, 'evenodd')) return f;
   }
   return null;
