@@ -1,0 +1,31 @@
+{
+  "name": "cartogram-ts",
+  "version": "0.1.0",
+  "description": "Turn GeoJSON into cartograms. Browser-compatible, dependency-free TypeScript.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "bin": { "cartogram-ts": "./dist/cli.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "npm run build && node dist/cli.js"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": ["cartogram", "geojson", "map", "cartography", "visualization"]
+}
