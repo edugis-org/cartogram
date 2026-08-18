@@ -59,7 +59,7 @@ remains visually recognizable.
 | N2 | Memory linear in vertex count + grid size. Streaming not required. |
 | N3 | Pure TypeScript, ESM, zero required native deps; must run in a browser without Node built-ins. Bundled size target < 100 kB min+gzip for the core. |
 | N4 | Optional Web Worker offloading; the heavy loop must be worker-safe (no DOM access) and support transferable `Float64Array` buffers. |
-| N5 | Dependencies kept minimal and browser-safe; permissive licences only (MIT/BSD/ISC/Apache-2.0). Note: the reference `go_cart` / `cartogram_cpp` implementations are **AGPL/GPL** — read them for method, do **not** copy code into an MIT library. |
+| N5 | Dependencies kept minimal and browser-safe; permissive licences only (MIT/BSD/ISC/Apache-2.0). Licences of the reference implementations, verified: `go_cart` is an *adapted MIT* licence (extra condition: cite Gastner, Seguy & More 2018 for generated images), `go-cart-wasm` is MIT, and only `cartogram-cpp` is **AGPL-3.0**. We implement from the papers in any case. |
 | N6 | Public API fully typed; `geojson` types from `@types/geojson`. |
 | N7 | Node ≥ 20, ES2022 target, works under Vite/webpack/rollup and via CDN. |
 

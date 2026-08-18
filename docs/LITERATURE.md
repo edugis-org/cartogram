@@ -36,7 +36,15 @@ The modern replacement, and our **primary target**. Same physics, but:
 - seconds instead of minutes; markedly better shape preservation.
 Reference implementation: [`Flow-Based-Cartograms/go_cart`](https://github.com/Flow-Based-Cartograms/go_cart) (C, unmaintained),
 succeeded by [`mgastner/cartogram-cpp`](https://github.com/mgastner/cartogram-cpp) (C++, actively developed).
-**Licence caution: these are GPL/AGPL.** Read for algorithm, do not copy code into a permissive library.
+
+**Licences, verified (an earlier note here was wrong):**
+- `go_cart` is **an adapted MIT licence**, not AGPL. It adds one condition: images
+  produced with it must cite Gastner, Seguy & More (2018).
+- `cartogram-cpp` **is AGPL-3.0**. Read for method only.
+- [`go-cart-wasm`](https://github.com/riatelab/go-cart-wasm) is **MIT**.
+
+So only `cartogram-cpp` is copyleft. We implement from the papers regardless, which keeps
+provenance simple, but the earlier blanket "these are all AGPL" claim was incorrect.
 
 ### Follow-ups worth reading
 - Gastner et al., *Smooth pycnophylactic interpolation produced by density-equalising map projections* ([arXiv:2207.00663](https://arxiv.org/pdf/2207.00663)) — same machinery, mass-preserving interpolation.
@@ -118,9 +126,9 @@ but relative geography stays legible.
 
 | Project | Lang / licence | Use to us |
 |---|---|---|
-| [`riatelab/go-cart-wasm`](https://github.com/riatelab/go-cart-wasm) | C→WASM, JS wrapper (GPL-ish, check) | Browser flow-based cartograms **today**. Candidate optional peer-dependency backend; benchmark/quality oracle for our TS port. |
-| [`Flow-Based-Cartograms/go_cart`](https://github.com/Flow-Based-Cartograms/go_cart) | C, AGPL | Reference implementation of GSM2018. Read-only reference. |
-| [`mgastner/cartogram-cpp`](https://github.com/mgastner/cartogram-cpp) | C++, AGPL | Current state of the art; source of edge-case handling (holes, exclaves, projection). Read-only reference. |
+| [`riatelab/go-cart-wasm`](https://github.com/riatelab/go-cart-wasm) | C→WASM + JS wrapper, **MIT** | The existing browser implementation of GSM2018: the reference C compiled with Emscripten. The direct alternative to our `flow` method, and the natural quality/performance oracle. Runs on the main thread by default; needs already-projected, equal-area coordinates; last release ~2024. |
+| [`Flow-Based-Cartograms/go_cart`](https://github.com/Flow-Based-Cartograms/go_cart) | C, **adapted MIT** (requires citing GSM 2018 for generated images) | Reference implementation of GSM2018. |
+| [`mgastner/cartogram-cpp`](https://github.com/mgastner/cartogram-cpp) | C++, **AGPL-3.0** | Current state of the art; source of edge-case handling (holes, exclaves, projection). Read-only reference, the one genuinely copyleft item here. |
 | [`go-cart-io/cartogram-web`](https://github.com/go-cart-io/cartogram-web) / [go-cart.io](https://go-cart.io/about) | web app | UX reference for our review harness. |
 | [`emeeks/d3-cartogram`](https://github.com/emeeks/d3-cartogram) | JS, BSD | Dougenik-style + TopoJSON arc warping in JS. Closest existing prior art to our contiguous fallback; good structural reference, but d3/TopoJSON-coupled and unmaintained. |
 | `d3-geo`, `d3-quadtree`, `d3-force` | JS, ISC | Projection, spatial index, Dorling relaxation primitives. Reusable directly. |

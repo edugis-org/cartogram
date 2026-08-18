@@ -61,10 +61,18 @@ export interface FlowReport {
  * coefficient simply decays as exp(-k^2 t). Advancing to any time t is one
  * multiplication per coefficient plus an inverse transform, with no PDE time stepping.
  *
- * Deviation from the paper worth stating: the velocity field is obtained by central
- * differences on the diffused grid rather than from analytic sine/cosine transforms of
- * the gradient. The field is smooth by construction -- it has been diffused and
- * blurred -- so the difference is small, and it halves the number of transforms.
+ * Lineage and honest scope. The physics is Gastner & Newman (2004): rasterize the
+ * density, diffuse it with a cosine transform, advect the map's points. The velocity
+ * formulation v = -grad(rho)/rho and the emphasis on integrating the flow come from
+ * Gastner, Seguy & More (2018). What this is *not* is a faithful reimplementation of
+ * the 2018 paper: their adaptive Runge-Kutta with step-size control is replaced here
+ * by a midpoint rule on a geometric time schedule, and their blur handling by the
+ * outer pass structure below. So: the same physics and the same flow formulation,
+ * with the integration engineered independently, and measured rather than assumed.
+ *
+ * A second deviation: the velocity field comes from central differences on the
+ * diffused grid rather than analytic sine/cosine transforms of the gradient. The field
+ * is smooth by construction, so the difference is small and it halves the transforms.
  */
 export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams): FlowReport {
   const n = g.featCount;
