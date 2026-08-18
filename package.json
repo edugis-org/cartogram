@@ -34,8 +34,11 @@
     "test:watch": "vitest",
     "cli": "npm run build && node dist/cli.js",
     "harness": "vite",
-    "harness:build": "vite build --outDir dist-harness",
-    "bench": "npm run build && node bench/run.mjs"
+    "bench": "npm run build && node bench/run.mjs",
+    "app:dev": "vite",
+    "app:build": "vite build",
+    "app:preview": "vite preview --outDir dist-app",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.14",
@@ -50,5 +53,16 @@
     "map",
     "cartography",
     "visualization"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anneb/cartogram-ts.git"
+  },
+  "homepage": "https://github.com/anneb/cartogram-ts#readme",
+  "bugs": {
+    "url": "https://github.com/anneb/cartogram-ts/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -1,5 +1,5 @@
 import { defineConfig, type Plugin } from 'vite';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, cpSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const VERDICTS = resolve(import.meta.dirname, 'harness/verdicts.json');
@@ -50,12 +50,49 @@ function verdictStore(): Plugin {
   };
 }
 
-// Root is the repo root so the harness can fetch datasets straight out of data/.
+/**
+ * The app loads its datasets from /data at runtime. In development that works because
+ * the dev server's root is the repo root; a production build has to carry them along,
+ * so they are copied into the output. They are not part of the npm package -- see
+ * `files` in package.json -- because a library has no business shipping 13 MB of
+ * Natural Earth and Eurostat geometry.
+ */
+function buildApp(outDir: string): Plugin {
+  return {
+    name: 'cartogram-build-app',
+    apply: 'build',
+    closeBundle() {
+      const out = resolve(import.meta.dirname, outDir);
+      cpSync(resolve(import.meta.dirname, 'data'), resolve(out, 'data'), { recursive: true });
+      // The entry keeps its source path (harness/index.html) so that asset URLs stay
+      // correct; a redirect at the root means the deployed app works at the domain
+      // root as well.
+      writeFileSync(
+        resolve(out, 'index.html'),
+        '<!doctype html><meta charset="utf-8">' +
+          '<title>cartogram-ts</title>' +
+          '<meta http-equiv="refresh" content="0; url=./harness/">' +
+          '<a href="./harness/">cartogram-ts review harness</a>\n',
+      );
+    },
+  };
+}
+
+const OUT_DIR = 'dist-app';
+
+// Root is the repo root so the app can fetch datasets straight out of data/.
 export default defineConfig({
   root: '.',
-  // No public dir: data/ is served straight from the repo root during development.
+  // No public dir: data/ is served from the repo root in dev and copied in on build.
   publicDir: false,
+  // Relative base, so the built app works from any path -- a project page on GitHub
+  // Pages, a subdirectory, or opened straight off disk.
+  base: './',
   server: { open: '/harness/', port: 5174 },
-  build: { rollupOptions: { input: resolve(import.meta.dirname, 'harness/index.html') } },
-  plugins: [verdictStore()],
+  build: {
+    outDir: OUT_DIR,
+    emptyOutDir: true,
+    rollupOptions: { input: resolve(import.meta.dirname, 'harness/index.html') },
+  },
+  plugins: [verdictStore(), buildApp(OUT_DIR)],
 });

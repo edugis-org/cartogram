@@ -176,5 +176,12 @@ Only the data in `data/` comes from outside; its sources and licences are record
 npm install
 npm test          # vitest
 npm run typecheck
-npm run build     # tsc -> dist/, ESM + .d.ts
+npm run build     # tsc -> dist/, ESM + .d.ts (the npm package)
+npm run bench     # benchmarks -> bench/results.json
+npm run app:dev   # the review harness at localhost:5174/harness/
+npm run app:build # the harness as a deployable app -> dist-app/
 ```
+
+The library and the app come out of the same repository: `npm publish` ships only `dist/`,
+while `npm run app:build` produces the harness plus its datasets. See
+[`docs/PUBLISHING.md`](docs/PUBLISHING.md).

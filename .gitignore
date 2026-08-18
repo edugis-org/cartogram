@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-app/
 dist-harness/
 *.tsbuildinfo
 out/
+cartogram-ts-*.tgz
