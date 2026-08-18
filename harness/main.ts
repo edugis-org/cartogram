@@ -152,12 +152,18 @@ function showMetrics(r: CartogramResult): void {
   if (m.shape) {
     // The anti-blob guard: a method that rounds regions into circles fails here even
     // when its area error is perfect.
-    const drift = m.shape.meanCompactnessDrift;
+    // Watch the drift among features that actually rounded: growing regions round
+    // while shrinking ones get ragged, so the all-feature mean cancels out and hides
+    // exactly the blobbing a reviewer can see.
+    const pos = m.shape.meanPositiveDrift;
     parts.push(
-      metric('compactness drift', drift.toFixed(4), Math.abs(drift) <= 0.05 ? 'good' : 'bad'),
+      metric('rounding (mean +drift)', `+${pos.toFixed(3)}`, pos <= 0.05 ? 'good' : 'bad'),
+      metric('rounding (max)', `+${m.shape.maxCompactnessDrift.toFixed(3)}`,
+        m.shape.maxCompactnessDrift <= 0.08 ? 'good' : 'bad'),
       metric('features rounder', `${(m.shape.fractionRounder * 100).toFixed(0)}%`,
         m.shape.fractionRounder < 0.7 ? 'good' : 'bad'),
-      metric('detail retention', m.shape.meanDetailRetention.toFixed(4),
+      metric('drift, all features', m.shape.meanCompactnessDrift.toFixed(3)),
+      metric('detail retention', m.shape.meanDetailRetention.toFixed(3),
         m.shape.meanDetailRetention > 0.9 ? 'good' : 'bad'),
     );
   }
@@ -258,7 +264,10 @@ for (const c of [els.canvasA, els.canvasB]) {
         `<strong>${scene.labels[found]}</strong><br>` +
         `value ${d.value.toLocaleString()}<br>` +
         `area ${r < 1 ? 'shrank' : 'grew'} ${r.toFixed(2)}×<br>` +
-        `error ${(d.error * 100).toFixed(3)}%`;
+        `error ${(d.error * 100).toFixed(3)}%` +
+        (d.compactnessDrift === undefined
+          ? ''
+          : `<br>rounding ${d.compactnessDrift >= 0 ? '+' : ''}${d.compactnessDrift.toFixed(3)}`);
       const stage = els.stage.getBoundingClientRect();
       els.tooltip.style.left = `${ev.clientX - stage.left + 14}px`;
       els.tooltip.style.top = `${ev.clientY - stage.top + 14}px`;

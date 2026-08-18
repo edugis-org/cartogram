@@ -39,6 +39,16 @@ export interface ShapePreservation {
   compactnessDrift: Float64Array;
   meanCompactnessDrift: number;
   maxCompactnessDrift: number;
+  /**
+   * Mean drift over only the features that got rounder.
+   *
+   * The plain mean is close to useless as a blob detector on a real map: growing
+   * regions round while shrinking ones get more ragged, and the two cancel. On the
+   * Dutch provinces the mean reads -0.039, which looks healthy, while Zuid-Holland
+   * and Utrecht are visibly turning into discs at +0.098 and +0.113. This number and
+   * `maxCompactnessDrift` are the ones to watch.
+   */
+  meanPositiveDrift: number;
   /** Fraction of features that got rounder. ~0.5 is neutral; near 1.0 is blobbing. */
   fractionRounder: number;
   /**
@@ -64,6 +74,7 @@ export function shapePreservation(before: FlatGeometry, after: FlatGeometry): Sh
   let driftSum = 0;
   let driftMax = -Infinity;
   let rounder = 0;
+  let positiveSum = 0;
   let retSum = 0;
   let retCount = 0;
 
@@ -74,7 +85,10 @@ export function shapePreservation(before: FlatGeometry, after: FlatGeometry): Sh
     drift[f] = d;
     driftSum += d;
     if (d > driftMax) driftMax = d;
-    if (d > 0) rounder++;
+    if (d > 0) {
+      rounder++;
+      positiveSum += d;
+    }
 
     const aIn = featureArea(before, f);
     const aOut = featureArea(after, f);
@@ -94,6 +108,7 @@ export function shapePreservation(before: FlatGeometry, after: FlatGeometry): Sh
     compactnessDrift: drift,
     meanCompactnessDrift: n > 0 ? driftSum / n : 0,
     maxCompactnessDrift: n > 0 ? driftMax : 0,
+    meanPositiveDrift: rounder > 0 ? positiveSum / rounder : 0,
     fractionRounder: n > 0 ? rounder / n : 0,
     detailRetention: retention,
     meanDetailRetention: retCount > 0 ? retSum / retCount : 1,

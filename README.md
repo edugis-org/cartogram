@@ -55,7 +55,9 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   real dataset — because bit-identical coordinates are collapsed to one moving point.
   Area error reaches ~2% on small compact maps and 12–35% on large or heavily skewed ones;
   that ceiling is the known limit of the force family and the reason the flow-based method
-  is next. See `docs/PROJECT_PLAN.md` for the measured table.
+  is next. Growing regions do round off somewhat (radial forces about each centroid are
+  inherently circular); raising `cutoff` to ~20 and `shapeAnchor` to ~0.8 counteracts it at
+  a real cost in area accuracy and speed. See `docs/PROJECT_PLAN.md` for the measured table.
 - **Dorling (1996) circles and Demers squares** — areas exact to floating point, zero
   overlapping symbols on every dataset, relative position preserved (rank correlation
   0.96–0.997). These discard shape entirely, so they are **opt-in and never the default**

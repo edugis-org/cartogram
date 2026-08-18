@@ -103,10 +103,11 @@ function main(argv: string[]): number {
     if (m.topology) lines.push(`topology   error ${m.topology.error.toFixed(4)} ` +
       `(${m.topology.sharedEdges}/${m.topology.inputEdges} adjacencies kept)`);
     if (m.shape) lines.push(
-      `shape      compactness drift mean ${m.shape.meanCompactnessDrift.toFixed(4)} ` +
-      `max ${m.shape.maxCompactnessDrift.toFixed(4)}, ` +
-      `${pct(m.shape.fractionRounder)} of features rounder, ` +
-      `detail retention ${m.shape.meanDetailRetention.toFixed(4)}`,
+      `shape      compactness drift: mean over rounder features ` +
+      `+${m.shape.meanPositiveDrift.toFixed(4)}, max +${m.shape.maxCompactnessDrift.toFixed(4)}, ` +
+      `${pct(m.shape.fractionRounder)} rounder (all-feature mean ` +
+      `${m.shape.meanCompactnessDrift.toFixed(4)}), detail retention ` +
+      `${m.shape.meanDetailRetention.toFixed(4)}`,
     );
     for (const w of result.warnings) lines.push(`warning    ${w}`);
     process.stderr.write(lines.join('\n') + '\n');

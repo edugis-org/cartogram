@@ -16,6 +16,17 @@ export interface DcnParams {
   /** Step size multiplier applied to every displacement. Default 1. */
   damping: number;
   /**
+   * Smoothing passes over the displacement field, along boundaries. Default 2.
+   *
+   * Each region pushes vertices radially away from its own centroid, so a growing
+   * region's boundary relaxes into circular arcs: a coastline that ran straight comes
+   * out bowed, and pinches where two growing regions meet. Smoothing the *displacement*
+   * (not the geometry) makes neighbouring vertices move together, so a boundary is
+   * carried along roughly rigidly and keeps its straights and its corners. Smoothing
+   * the geometry instead would erase detail, which is the opposite of what is wanted.
+   */
+  smoothing: number;
+  /**
    * Anti-blob strength, 0..1 (requirement F20a). Default 0.25.
    *
    * The force field is smooth, so it flattens boundary detail: repeated iterations
@@ -33,6 +44,7 @@ export const DCN_DEFAULTS: DcnParams = {
   targetError: 0.02,
   cutoff: 5,
   damping: 1,
+  smoothing: 2,
   // 0.25 measured best across the datasets in data/: it removes the fold retries on
   // NUTS 2 entirely and halves the area error there. Higher values fight the force
   // field and fold; 0 leaves boundaries noticeably rougher.
@@ -167,6 +179,12 @@ export function dcn(g: FlatGeometry, values: Float64Array, params: DcnParams): D
         dx[i]! *= cap / mag;
         dy[i]! *= cap / mag;
       }
+    }
+
+    // Locally rigid motion: neighbouring boundary vertices should travel together,
+    // otherwise the radial force field bows every straight edge into an arc.
+    for (let pass = 0; pass < params.smoothing; pass++) {
+      smoothDisplacement(g, vi, dx, dy);
     }
 
     // Dougenik's force reduction factor: while the map is still badly wrong, the
@@ -320,6 +338,41 @@ function accumulateForces(
         }
       }
     }
+  }
+}
+
+/**
+ * One Laplacian pass over the displacement field, following the boundary polylines.
+ *
+ * Averaging is done per *unique* vertex over every ring that uses it, so a shared
+ * border smooths consistently from both sides and stays welded.
+ */
+function smoothDisplacement(
+  g: FlatGeometry,
+  vi: VertexIndex,
+  dx: Float64Array,
+  dy: Float64Array,
+): void {
+  const accX = new Float64Array(vi.count);
+  const accY = new Float64Array(vi.count);
+  const hits = new Uint32Array(vi.count);
+
+  for (let r = 0; r < g.ringCount; r++) {
+    const [s, e] = ringRange(g, r);
+    for (let v = s; v < e; v++) {
+      const prev = v === s ? e - 1 : v - 1;
+      const next = v + 1 < e ? v + 1 : s;
+      const id = vi.ids[v]!;
+      accX[id]! += (dx[vi.ids[prev]!]! + dx[vi.ids[next]!]!) / 2;
+      accY[id]! += (dy[vi.ids[prev]!]! + dy[vi.ids[next]!]!) / 2;
+      hits[id]!++;
+    }
+  }
+
+  for (let i = 0; i < vi.count; i++) {
+    if (hits[i]! === 0) continue;
+    dx[i] = 0.5 * dx[i]! + 0.5 * (accX[i]! / hits[i]!);
+    dy[i] = 0.5 * dy[i]! + 0.5 * (accY[i]! / hits[i]!);
   }
 }
 

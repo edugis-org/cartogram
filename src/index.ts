@@ -107,6 +107,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         cutoff: options.cutoff ?? DCN_DEFAULTS.cutoff,
         damping: options.damping ?? DCN_DEFAULTS.damping,
         shapeAnchor: options.shapeAnchor ?? DCN_DEFAULTS.shapeAnchor,
+        smoothing: options.smoothing ?? DCN_DEFAULTS.smoothing,
         onIteration: options.onIteration,
         signal: options.signal,
       });
@@ -168,14 +169,17 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     ...(densification ? { densification } : {}),
   };
 
+  let perFeatureDrift: Float64Array | undefined;
   if (before) {
     metrics.topology = topologyError(before, packed);
     metrics.orientation = orientationPreservation(before, packed);
     const shape = shapePreservation(before, packed);
+    perFeatureDrift = shape.compactnessDrift;
     // Anti-blob guard (F20a/F20b): compactness must not systematically rise.
     metrics.shape = {
       meanCompactnessDrift: shape.meanCompactnessDrift,
       maxCompactnessDrift: shape.maxCompactnessDrift,
+      meanPositiveDrift: shape.meanPositiveDrift,
       fractionRounder: shape.fractionRounder,
       meanDetailRetention: shape.meanDetailRetention,
     };
@@ -190,6 +194,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     outputArea: outputAreas[i]!,
     error: errors[i]!,
     substituted: keptSubstituted[i]!,
+    ...(perFeatureDrift ? { compactnessDrift: perFeatureDrift[i]! } : {}),
   }));
 
   // --- rebuild ----------------------------------------------------------------

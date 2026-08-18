@@ -107,8 +107,22 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   - **Contiguity: met, exactly.** Topology error is 0.000 everywhere (0.019 on the
     synthetic hex grid, where a handful of corner-touching cells separate). No folds
     survive into the output.
-  - **Anti-blob: met.** Compactness drift is negative on every dataset, i.e. nothing is
-    being rounded towards a circle. Detail retention above 1 means boundaries are
+  - **Anti-blob: partly met, and the first summary metric was misleading.** The
+    all-feature mean drift is negative on every dataset, which looked healthy, but on
+    inspection the Dutch provinces show Utrecht at +0.113 and Zuid-Holland at +0.098
+    while Drenthe sits at -0.29: growing regions round off, shrinking ones get ragged,
+    and the mean cancels the two. Visually the Holland coastline bows outward and
+    pinches at the provincial border. The metric now reports the mean drift **over the
+    features that rounded** plus the max, which is what a reviewer actually sees, and
+    per-feature drift is in the diagnostics.
+    Radial forces about each region's centroid are the cause and no parameter removes
+    it: smoothing the displacement field changes nothing (the field is already smooth),
+    and raising `cutoff` to 20 with `shapeAnchor` 0.8 does help
+    (Zuid-Holland +0.098 -> +0.073) but costs a great deal of area accuracy on dense
+    data (NUTS 2 from 14.6% to 37.2%) and runs 3x slower. It is exposed as a documented
+    trade-off rather than a new default. **The structural fix is the flow-based method
+    (M5), which warps one global field instead of inflating each region about its own
+    centre.** Detail retention above 1 means boundaries are
     *rougher* than a pure rescale, which is what a warp does to a straight edge; it is
     strongest on the synthetic grid, where every edge starts perfectly straight.
   - **Area error < 5%: met only on small, compact, moderately skewed datasets**

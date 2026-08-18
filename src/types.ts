@@ -81,6 +81,12 @@ export interface DcnOptions extends CommonOptions {
   /** Step size multiplier. Default 1. Lower it if the map folds. */
   damping?: number;
   /**
+   * Smoothing passes over the displacement field along boundaries. Default 2.
+   * Radial forces bow straight edges into arcs; smoothing the displacement makes
+   * neighbouring vertices travel together so boundaries move roughly rigidly.
+   */
+  smoothing?: number;
+  /**
    * Anti-blob strength, 0..1. Default 0.25. The force field is smooth and slowly
    * erases boundary detail, which is what rounds regions into circles; this puts the
    * detail back at the region's new scale. 0 reproduces textbook DCN, blobbing and all.
@@ -140,6 +146,12 @@ export interface FeatureDiagnostic {
   error: number;
   /** True if this feature's value was substituted by the missing-value policy. */
   substituted: boolean;
+  /**
+   * Change in Polsby-Popper compactness for this feature. Positive means it became
+   * rounder; a large positive value on a growing region is the blob failure (F20a)
+   * that aggregate metrics hide.
+   */
+  compactnessDrift?: number;
 }
 
 export interface AreaErrorMetrics {
@@ -163,14 +175,18 @@ export interface CartogramMetrics {
   topology?: TopologyMetrics;
   /**
    * Shape-preservation guard (requirements F20a/F20b). Compactness is Polsby-Popper
-   * 4*pi*A/P^2, which is 1 for a circle. If `meanCompactnessDrift` is clearly positive
-   * and `fractionRounder` approaches 1, the method is rounding regions into blobs and
-   * has failed, however low its area error. `meanDetailRetention` well below 1 means
-   * boundary detail has been smoothed away.
+   * 4*pi*A/P^2, which is 1 for a circle.
+   *
+   * Watch `meanPositiveDrift` and `maxCompactnessDrift`, not `meanCompactnessDrift`:
+   * on a real map the regions that grow round off while the regions that shrink get
+   * more ragged, so the plain mean cancels out and reports a healthy-looking negative
+   * number while individual regions are visibly turning into discs.
+   * `meanDetailRetention` well below 1 means boundary detail has been smoothed away.
    */
   shape?: {
     meanCompactnessDrift: number;
     maxCompactnessDrift: number;
+    meanPositiveDrift: number;
     fractionRounder: number;
     meanDetailRetention: number;
   };

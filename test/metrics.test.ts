@@ -76,6 +76,48 @@ describe('shape preservation (anti-blob guard, F20a/F20b)', () => {
     expect(s.meanDetailRetention).toBeCloseTo(1, 12);
   });
 
+  it('reports rounding even when the all-feature mean cancels it out', () => {
+    // The failure this metric exists to catch, and the one the plain mean missed on
+    // the Dutch provinces: one region rounds off while another gets more ragged, so
+    // the average looks healthy while the map visibly blobs.
+    const sq = squareFeature('a', 0, 0, 2, 1) as AreaFeature;
+    const ragged = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [10, 0], [11, 0.4], [12, 0], [12, 1], [11, 0.6], [10, 1], [10, 0],
+        ]],
+      },
+    } as AreaFeature;
+    const circleRing = Array.from({ length: 64 }, (_, i) => {
+      const t = (2 * Math.PI * i) / 64;
+      const r = 2 / Math.sqrt(Math.PI);
+      return [1 + r * Math.cos(t), 1 + r * Math.sin(t)];
+    });
+    const blob = {
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Polygon', coordinates: [[...circleRing, circleRing[0]!]] },
+    } as AreaFeature;
+    const spikier = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [10, 0], [11, 0.9], [12, 0], [12, 1], [11, 0.1], [10, 1], [10, 0],
+        ]],
+      },
+    } as AreaFeature;
+
+    const s = shapePreservation(pack([sq, ragged]), pack([blob, spikier]));
+    expect(s.meanCompactnessDrift).toBeLessThan(0.1); // the mean hides it
+    expect(s.meanPositiveDrift).toBeGreaterThan(0.2); // this does not
+    expect(s.maxCompactnessDrift).toBeGreaterThan(0.2);
+  });
+
   it('detects a square being rounded into a circle', () => {
     // The exact failure mode requirement F20a exists to catch: same area, same
     // position, outline relaxed towards a circle.
