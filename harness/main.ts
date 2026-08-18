@@ -206,7 +206,13 @@ function showMetrics(r: CartogramResult): void {
     );
   }
   if (r.warnings.length) {
-    parts.push(`<div class="note">${r.warnings.map((w) => `· ${w}`).join('<br>')}</div>`);
+    // The under-resolved warning is the one that explains an otherwise baffling
+    // result: a dense little region that shrinks instead of growing.
+    parts.push(
+      `<div class="note">${r.warnings
+        .map((w) => (/grid cell/.test(w) ? `<strong class="bad">· ${w}</strong>` : `· ${w}`))
+        .join('<br>')}</div>`,
+    );
   }
   els.metrics.innerHTML = parts.join('');
 }

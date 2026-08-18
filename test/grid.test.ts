@@ -77,3 +77,38 @@ describe('density grid', () => {
     expect(Array.from(a.rho)).toEqual(Array.from(b.rho));
   });
 });
+
+describe('features smaller than a grid cell', () => {
+  it('gives every feature at least one cell', () => {
+    // A feature smaller than a cell can fall between cell centres and own nothing,
+    // contributing nothing to the density field: it exerts no pressure and is dragged
+    // along by its neighbours. At grid 256, 674 of the 1333 NUTS 3 regions were in
+    // that position, Paris among them -- 49 km^2 and 2.1 million people, coming out
+    // smaller than it started.
+    const big = squareFeature('big', 0, 0, 100, 1) as AreaFeature;
+    const specks = Array.from({ length: 8 }, (_, i) =>
+      squareFeature(`speck${i}`, 10 + i * 0.3, 10, 0.05, 1000) as AreaFeature,
+    );
+    const g = pack([big, ...specks]);
+    const values = Float64Array.from([1, ...specks.map(() => 1000)]);
+    const grid = buildDensityGrid(g, values, 64, 1.2);
+
+    const counts = new Int32Array(g.featCount);
+    for (const o of grid.owner) if (o >= 0) counts[o]!++;
+    for (let f = 0; f < g.featCount; f++) {
+      expect(counts[f], `feature ${f} owns no cell`).toBeGreaterThan(0);
+    }
+    expect(grid.underResolved).toBeGreaterThan(0);
+  });
+
+  it('never takes another feature\'s last cell', () => {
+    const features = Array.from({ length: 20 }, (_, i) =>
+      squareFeature(`f${i}`, i * 0.11, 0, 0.02, 1) as AreaFeature,
+    );
+    const g = pack(features);
+    const grid = buildDensityGrid(g, Float64Array.from(features.map(() => 1)), 64, 1.2);
+    const counts = new Int32Array(g.featCount);
+    for (const o of grid.owner) if (o >= 0) counts[o]!++;
+    for (let f = 0; f < g.featCount; f++) expect(counts[f]).toBeGreaterThan(0);
+  });
+});

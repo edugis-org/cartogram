@@ -37,6 +37,8 @@ export interface FlowReport {
   /** Diffusion time reached in the final pass. Diagnostic only. */
   time: number;
   seaFraction: number;
+  /** Features smaller than one grid cell in the final pass. */
+  underResolved: number;
 }
 
 /**
@@ -86,7 +88,15 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   }
   const target = new Float64Array(n);
   if (valueSum <= 0 || areaSum <= 0) {
-    return { targetAreas: target, steps: 0, meanError: 0, converged: true, time: 0, seaFraction: 0 };
+    return {
+      targetAreas: target,
+      steps: 0,
+      meanError: 0,
+      converged: true,
+      time: 0,
+      seaFraction: 0,
+      underResolved: 0,
+    };
   }
   for (let f = 0; f < n; f++) target[f] = (areaSum * values[f]!) / valueSum;
 
@@ -116,6 +126,7 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   let steps = 0;
   let stalled = 0;
   let seaFraction = 0;
+  let underResolved = 0;
   let lastTime = 0;
 
   // Outer loop over a decreasing blur, each pass re-rasterizing the *current* map.
@@ -133,6 +144,7 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
 
     const grid = buildDensityGrid(g, values, size, params.padding);
     seaFraction = grid.seaFraction;
+    underResolved = grid.underResolved;
     const coeff = Float64Array.from(grid.rho);
     dct2Forward(coeff, size, size, dct, dct);
 
@@ -211,6 +223,7 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
     converged,
     time: lastTime,
     seaFraction,
+    underResolved,
   };
 }
 

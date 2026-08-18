@@ -135,6 +135,12 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         signal: options.signal,
       });
       targetAreas = report.targetAreas;
+      if (report.underResolved > 0) {
+        warnings.push(
+          `${report.underResolved} features are smaller than one grid cell and had to be ` +
+            `given one; their areas are quantized to the grid. Increase \`grid\` for accuracy.`,
+        );
+      }
       iteration = {
         iterations: report.steps,
         meanError: report.meanError,
