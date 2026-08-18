@@ -37,6 +37,13 @@ export interface DrawOptions {
   adjacency: boolean;
   choropleth: 'none' | 'error' | 'ratio';
   hover: number | null;
+  /**
+   * Which pane this is. The cartogram is the thing being judged, so it gets the
+   * strong outline; the reference map and the ghost stay quiet. Getting this the
+   * wrong way round makes every method look alike, because what you actually see is
+   * the original in both panes.
+   */
+  role: 'cartogram' | 'reference';
 }
 
 /** Fit a coordinate array into the canvas with a small margin. */
@@ -81,7 +88,7 @@ function divergingColor(v: number, alpha = 0.85): string {
 }
 
 function featureFill(scene: Scene, f: number, mode: DrawOptions['choropleth']): string {
-  if (mode === 'none') return 'rgba(148, 163, 184, 0.35)';
+  if (mode === 'none') return 'rgba(148, 163, 184, 0.22)';
   if (mode === 'error') {
     // Error is unsigned; show magnitude only, on the "too big" side of the ramp.
     return divergingColor(Math.min(1, scene.errors[f]! * 8));
@@ -143,18 +150,26 @@ export function draw(
   const coords = morph(scene, opts.t, scratch);
   const g = geometryAt(scene, opts.t);
 
-  // Ghost: the original outline, so distortion is readable at a glance.
-  if (opts.ghost && opts.t > 0) {
+  // Ghost: where the region used to be. Kept faint and dashed so it reads as a
+  // reference rather than competing with the shape being judged.
+  if (opts.ghost && opts.t > 0 && opts.role === 'cartogram') {
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(226, 232, 240, 0.28)';
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.30)';
+    ctx.setLineDash([3, 3]);
     for (let f = 0; f < scene.geomA.featCount; f++) {
       tracePath(ctx, scene.geomA, f, scene.a, view);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
   }
 
-  ctx.lineWidth = 0.7;
-  ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+  if (opts.role === 'cartogram') {
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = 'rgba(241, 245, 249, 0.92)';
+  } else {
+    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.55)';
+  }
   for (let f = 0; f < g.featCount; f++) {
     tracePath(ctx, g, f, coords, view);
     ctx.fillStyle = featureFill(scene, f, opts.choropleth);

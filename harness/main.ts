@@ -169,13 +169,14 @@ function showMetrics(r: CartogramResult): void {
 
 // --- rendering ---------------------------------------------------------------
 
-function options(t: number): DrawOptions {
+function options(t: number, role: DrawOptions['role']): DrawOptions {
   return {
     t,
     ghost: els.ghost.checked,
     adjacency: els.adjacency.checked,
     choropleth: els.choropleth.value as DrawOptions['choropleth'],
     hover,
+    role,
   };
 }
 
@@ -191,10 +192,10 @@ function render(): void {
 
   if (side) {
     const ctxA = els.canvasA.getContext('2d')!;
-    draw(ctxA, scene, view, { ...options(0), ghost: false, hover }, scratch);
+    draw(ctxA, scene, view, options(0, 'reference'), scratch);
   }
   const ctxB = els.canvasB.getContext('2d')!;
-  draw(ctxB, scene, view, options(t), scratch);
+  draw(ctxB, scene, view, options(t, 'cartogram'), scratch);
 }
 
 function resize(refit = false): void {
