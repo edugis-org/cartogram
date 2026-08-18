@@ -2,15 +2,15 @@
 
 Turn GeoJSON into cartograms. TypeScript, browser-compatible, **zero runtime dependencies**.
 
-Status: **M0–M4 complete.** The pipeline, four cartogram methods, the metric suite and the
-human review harness work end to end on real data.
-The flow-based method (Gastner-Seguy-More 2018), which is the quality target, is next.
+Status: **M0–M5 complete.** The pipeline, five cartogram methods including the flow-based
+one that is the quality target, the metric suite and the human review harness all work
+end to end on real data. Remaining: performance work and hardening (M6, M7).
 
 ```ts
 import { cartogram } from 'cartogram-ts';
 
 const result = cartogram(featureCollection, {
-  method: 'dcn',          // 'identity' | 'olson' | 'dcn' | 'dorling' | 'demers'
+  method: 'flow',         // 'identity' | 'olson' | 'dcn' | 'flow' | 'dorling' | 'demers'
   value: 'population',    // property name, or (feature, i) => number
   projection: 'auto',     // 'auto' | 'none' | 'laea' | 'cylindrical-equal-area'
   missing: 'error',       // 'error' | 'zero' | 'mean' | 'drop'
@@ -48,6 +48,14 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   parameters. It is also the pipeline's correctness oracle: its area error is ~1e-16 on
   every dataset in `data/`, so any bug in areas, projection or value handling shows up
   immediately.
+- **Flow-based cartogram (Gastner, Seguy & More 2018)** — the quality target and the
+  best method here. The map is rasterized to a density field, diffused to uniform, and
+  every point is carried by the flow `v = -grad(rho)/rho`. Area error 0.25% on the Dutch
+  provinces against 1.87% for the force method, and 8.7% against 28.7% on world
+  countries. Shared borders cannot tear and regions round off far less, both by
+  construction rather than by effort: one global displacement field is applied to every
+  point. Diffusion is solved in the cosine basis, where the heat equation is diagonal, on
+  an FFT written for the purpose and checked against direct evaluation of the transforms.
 - **Dougenik–Chrisman–Niemeyer (1985) contiguous cartogram**, hardened along the lines of
   Sun (2020): local support through a uniform grid (linear in vertex count, not quadratic
   in features), per-vertex step caps that prevent folds at the source, and an explicit

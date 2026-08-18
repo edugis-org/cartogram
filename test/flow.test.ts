@@ -1,0 +1,131 @@
+import { describe, expect, it } from 'vitest';
+import { cartogram } from '../src/index.ts';
+import { fc, squareFeature, load, has } from './helpers.ts';
+import type { CartogramResult } from '../src/types.ts';
+
+const run = (input: ReturnType<typeof fc>, opts: Record<string, unknown> = {}): CartogramResult =>
+  cartogram(input, {
+    method: 'flow',
+    value: 'value',
+    projection: 'none',
+    grid: 128,
+    ...opts,
+  } as never);
+
+function grid(values: number[][]) {
+  const features = [];
+  for (let j = 0; j < values.length; j++) {
+    for (let i = 0; i < values[j]!.length; i++) {
+      features.push(squareFeature(`c${i}-${j}`, i, j, 1, values[j]![i]!));
+    }
+  }
+  return fc(features);
+}
+
+describe('flow-based cartogram', () => {
+  it('equalizes density: two regions reach the ratio of their values', () => {
+    const two = fc([squareFeature('a', 0, 0, 1, 3), squareFeature('b', 1, 0, 1, 1)]);
+    const r = run(two, { grid: 256, padding: 1 });
+    const [a, b] = r.diagnostics.map((d) => d.outputArea);
+    expect(a! / b!).toBeGreaterThan(2.7);
+    expect(a! / b!).toBeLessThan(3.3);
+  });
+
+  it('keeps shared borders welded without any vertex bookkeeping (F18)', () => {
+    // The force method needs an explicit vertex index for this. Here it is automatic:
+    // one displacement field is applied to every point, so identical coordinates have
+    // identical images whatever the field does.
+    const r = run(grid([[1, 4, 1], [6, 1, 3], [1, 2, 9]]));
+    expect(r.metrics.topology!.error).toBe(0);
+  });
+
+  it('rounds regions off markedly less than the force method', () => {
+    // The reason this method is the quality target: nothing pushes a boundary radially
+    // away from a centroid, so straight edges stay much straighter.
+    const input = grid([[1, 6, 1], [6, 1, 6], [1, 6, 1]]);
+    const flowResult = run(input, { grid: 256 });
+    const dcnResult = cartogram(input, {
+      method: 'dcn',
+      value: 'value',
+      projection: 'none',
+    } as never);
+    expect(flowResult.metrics.shape!.meanPositiveDrift).toBeLessThan(
+      dcnResult.metrics.shape!.meanPositiveDrift,
+    );
+  });
+
+  it('reports progress and honours cancellation (F17)', () => {
+    const seen: number[] = [];
+    run(grid([[1, 9], [9, 1]]), { onIteration: (_i: number, e: number) => seen.push(e) });
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen[seen.length - 1]!).toBeLessThan(seen[0]!);
+
+    const controller = new AbortController();
+    controller.abort();
+    const stopped = run(grid([[1, 9], [9, 1]]), { signal: controller.signal });
+    expect(stopped.iteration!.iterations).toBe(0);
+  });
+
+  it('rejects a grid size that is not a power of two', () => {
+    expect(() => run(grid([[1, 2]]), { grid: 100 })).toThrow(/power of two/);
+  });
+
+  it('is deterministic', () => {
+    const input = grid([[1, 4], [7, 2]]);
+    expect(JSON.stringify(run(input).featureCollection)).toBe(
+      JSON.stringify(run(input).featureCollection),
+    );
+  });
+
+  it('handles holes and multipolygons', () => {
+    const input = fc([
+      {
+        type: 'Feature',
+        properties: { value: 3 },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+            [[3, 3], [3, 6], [6, 6], [6, 3], [3, 3]],
+          ],
+        },
+      },
+      {
+        type: 'Feature',
+        properties: { value: 1 },
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: [[[[10, 0], [14, 0], [14, 10], [10, 10], [10, 0]]], [[[20, 0], [22, 0], [22, 2], [20, 2], [20, 0]]]],
+        },
+      },
+    ]);
+    const r = run(input);
+    expect(r.featureCollection.features[1]!.geometry!.type).toBe('MultiPolygon');
+    expect(Number.isFinite(r.metrics.areaError.mean)).toBe(true);
+  });
+
+  it('survives zero values', () => {
+    const r = run(grid([[0, 5], [5, 5]]));
+    expect(r.metrics.topology!.error).toBe(0);
+    expect(Number.isFinite(r.metrics.areaError.mean)).toBe(true);
+  });
+});
+
+describe('flow on real data', () => {
+  it.skipIf(!has('data/real/nl-provinces.geojson'))(
+    'beats the force method on the Dutch provinces, in both area and rounding',
+    () => {
+      const input = load('data/real/nl-provinces.geojson');
+      const opts = { value: 'POP_2021', missing: 'drop', negative: 'clamp' } as const;
+      const flowResult = cartogram(input, { ...opts, method: 'flow', grid: 256 } as never);
+      const dcnResult = cartogram(input, { ...opts, method: 'dcn' } as never);
+
+      expect(flowResult.metrics.areaError.mean).toBeLessThan(0.02);
+      expect(flowResult.metrics.areaError.mean).toBeLessThan(dcnResult.metrics.areaError.mean);
+      expect(flowResult.metrics.shape!.meanPositiveDrift).toBeLessThan(
+        dcnResult.metrics.shape!.meanPositiveDrift,
+      );
+      expect(flowResult.metrics.topology!.error).toBe(0);
+    },
+  );
+});

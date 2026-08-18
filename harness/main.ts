@@ -16,6 +16,10 @@ const els = {
   fitRow: $('fit-row'),
   dcnParams: $('dcn-params'),
   dorlingParams: $('dorling-params'),
+  flowParams: $('flow-params'),
+  grid: $<HTMLSelectElement>('grid'),
+  runs: $<HTMLInputElement>('runs'),
+  blur: $<HTMLInputElement>('blur'),
   fill: $<HTMLInputElement>('fill'),
   iterations: $<HTMLInputElement>('iterations'),
   shapeAnchor: $<HTMLInputElement>('shapeAnchor'),
@@ -58,7 +62,9 @@ function runKey(): string {
       ? `it${els.iterations.value} a${els.shapeAnchor.value} c${els.cutoff.value} d${els.damping.value}`
       : els.method.value === 'dorling' || els.method.value === 'demers'
         ? `it${els.iterations.value} fill${els.fill.value}`
-        : '-',
+        : els.method.value === 'flow'
+          ? `g${els.grid.value} runs${els.runs.value} blur${els.blur.value}`
+          : '-',
     els.projection.value,
     els.missing.value,
   ].join(' | ');
@@ -91,6 +97,9 @@ async function run(): Promise<void> {
       cutoff: Number(els.cutoff.value),
       damping: Number(els.damping.value),
       fill: Number(els.fill.value),
+      grid: Number(els.grid.value),
+      runs: Number(els.runs.value),
+      blur: Number(els.blur.value),
     });
     scene = built.scene;
     result = built.result;
@@ -397,11 +406,13 @@ function syncMethodControls(): void {
   els.fitRow.style.display = m === 'olson' ? '' : 'none';
   els.dcnParams.style.display = m === 'dcn' ? '' : 'none';
   els.dorlingParams.style.display = m === 'dorling' || m === 'demers' ? '' : 'none';
+  els.flowParams.style.display = m === 'flow' ? '' : 'none';
 }
 
 for (const el of [
   els.attribute, els.missing, els.method, els.fit, els.projection,
   els.iterations, els.shapeAnchor, els.cutoff, els.damping, els.fill,
+  els.grid, els.runs, els.blur,
 ]) {
   el.addEventListener('change', () => {
     syncMethodControls();

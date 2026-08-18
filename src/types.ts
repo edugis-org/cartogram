@@ -19,7 +19,7 @@ export type MissingPolicy = 'error' | 'zero' | 'mean' | 'drop';
 /** Planar working coordinate system. */
 export type ProjectionName = 'auto' | 'none' | 'laea' | 'cylindrical-equal-area';
 
-export type MethodName = 'identity' | 'olson' | 'dcn' | 'dorling' | 'demers';
+export type MethodName = 'identity' | 'olson' | 'dcn' | 'dorling' | 'demers' | 'flow';
 
 export interface CommonOptions {
   /** Property name or accessor yielding the numeric cartogram variable. */
@@ -125,7 +125,34 @@ export interface DorlingOptions extends CommonOptions {
   signal?: AbortSignal;
 }
 
-export type CartogramOptions = IdentityOptions | OlsonOptions | DcnOptions | DorlingOptions;
+/**
+ * Flow-based contiguous cartogram (Gastner, Seguy & More 2018). The quality target:
+ * shared borders cannot tear and regions do not round off, both by construction.
+ */
+export interface FlowOptions extends CommonOptions {
+  method: 'flow';
+  /** Grid resolution per side, a power of two. Default 512. Higher = finer, slower. */
+  grid?: number;
+  /** Domain size as a multiple of the map's larger dimension. Default 1.5. */
+  padding?: number;
+  /** Stop once the mean cartographic error reaches this. Default 0.01. */
+  targetError?: number;
+  /** Integration steps within one pass. Default 60. */
+  stepsPerRun?: number;
+  /** Passes over the whole flow, each re-rasterizing the current map. Default 10. */
+  runs?: number;
+  /** Blur of the first pass, in cells; halves each pass. Default 4. */
+  blur?: number;
+  onIteration?: (step: number, meanError: number) => void;
+  signal?: AbortSignal;
+}
+
+export type CartogramOptions =
+  | IdentityOptions
+  | OlsonOptions
+  | DcnOptions
+  | DorlingOptions
+  | FlowOptions;
 
 /** Per-feature diagnostics, in the working (projected) plane. */
 export interface FeatureDiagnostic {
@@ -213,6 +240,9 @@ export interface IterationReport {
   foldRetries: number;
   /** Dorling/Demers: pairs still overlapping when relaxation stopped. */
   overlaps?: number;
+  /** Flow: diffusion time reached, and the fraction of the grid that was sea. */
+  diffusionTime?: number;
+  seaFraction?: number;
 }
 
 export interface CartogramResult {

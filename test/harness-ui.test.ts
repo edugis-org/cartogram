@@ -12,7 +12,7 @@ const main = readFileSync('harness/main.ts', 'utf8');
  */
 describe('harness markup matches the script', () => {
   it('offers every cartogram method', () => {
-    for (const method of ['identity', 'olson', 'dcn', 'dorling', 'demers']) {
+    for (const method of ['identity', 'olson', 'dcn', 'flow', 'dorling', 'demers']) {
       expect(html, `method '${method}' missing from the method dropdown`).toContain(
         `value="${method}"`,
       );
@@ -31,7 +31,7 @@ describe('harness markup matches the script', () => {
   });
 
   it('has a parameter panel per parameterised method', () => {
-    for (const id of ['fit-row', 'dcn-params', 'dorling-params']) {
+    for (const id of ['fit-row', 'dcn-params', 'dorling-params', 'flow-params']) {
       expect(html).toContain(`id="${id}"`);
     }
   });

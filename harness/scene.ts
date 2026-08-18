@@ -22,6 +22,9 @@ export interface RunSpec {
   cutoff?: number;
   damping?: number;
   fill?: number;
+  grid?: number;
+  runs?: number;
+  blur?: number;
 }
 
 export function areaFeatures(fc: FeatureCollection): AreaFeature[] {
@@ -66,6 +69,13 @@ export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene
       ? {
           ...(spec.iterations !== undefined ? { iterations: spec.iterations } : {}),
           ...(spec.fill !== undefined ? { fill: spec.fill } : {}),
+        }
+      : {}),
+    ...(spec.method === 'flow'
+      ? {
+          ...(spec.grid !== undefined ? { grid: spec.grid } : {}),
+          ...(spec.runs !== undefined ? { runs: spec.runs } : {}),
+          ...(spec.blur !== undefined ? { blur: spec.blur } : {}),
         }
       : {}),
     ...(spec.method === 'dcn'

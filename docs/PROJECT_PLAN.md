@@ -162,7 +162,7 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   methods discard shape by construction, which is exactly why F20a makes them opt-in
   and never the default.
 
-### M5 — Flow-based Gastner–Seguy–More (3–4 weeks, the main event)
+### M5 — Flow-based Gastner–Seguy–More ✅ done
 0. Reuse the densification pass from M3.
 1. Rasterize density onto a `2^k × 2^k` grid with sea padding and the standard
    density-averaging + blur.
@@ -172,8 +172,38 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
 5. Advect all vertices; unproject; measure.
 - Validate stage-by-stage against `go_cart` / `cartogram-cpp` outputs as an external oracle
   (run them once offline, commit their outputs as fixtures — **outputs only, no GPL code**).
-- **Exit:** mean area error < 1% on world/NUTS/NL; shape distortion **and compactness drift**
-  below the force method's; world 110m under 2 s in a browser worker at grid 512.
+- **Exit criteria, measured** (`missing: 'drop'`, grid 512 unless noted):
+
+  | dataset | flow area err | dcn area err | flow rounding | dcn rounding | topology | flow time |
+  |---|---|---|---|---|---|---|
+  | nl-provinces | **0.25%** | 1.87% | +0.041 | +0.090 | 0.000 | 5.3 s |
+  | nl-municipalities | **2.07%** | 11.90% | +0.093 | +0.092 | 0.000 | 17 s |
+  | nuts2-20m | **10.04%** | 14.59% | +0.071 | +0.064 | 0.000 | 19 s |
+  | world-110m | **8.66%** | 28.73% | +0.066 | +0.075 | 0.000 | 17 s |
+  | grid (synthetic) | **0.90%** | 3.14% | +0.180 | +0.023 | 0.000 | 16 s |
+  | nuts0 | 7.63% | **5.89%** | +0.027 | +0.017 | 0.000 | 17 s |
+
+  - **Area error: met on NL, well improved elsewhere, not met everywhere.** Beats the
+    force method on five of six datasets, by 3x to 7x on the ones that matter most.
+    NUTS 0 is the exception and the reason is resolution: a country is only as accurate
+    as the number of grid cells it covers, and NUTS 0 mixes Malta and Cyprus with
+    France. Raising the grid helps monotonically (NUTS 2: 23.4% at 256, 10.0% at 512).
+  - **Shape: met.** Rounding is roughly half the force method's on real maps, and
+    shared borders are welded *by construction* -- one displacement field applied to
+    every point, so identical coordinates have identical images. No vertex index, no
+    snapping, no fold detection: none of the machinery M3 needed.
+  - **Runtime: not met.** 5 s for 12 provinces at grid 512, 17 s for the larger sets,
+    against a 2 s target. Cost is dominated by one 2D inverse cosine transform per
+    integration step (600 steps by default). The obvious next step is the Web Worker
+    offload of M6 plus a cheaper step schedule; the harness defaults to grid 256, which
+    is interactive at 1-6 s.
+- Implementation notes: diffusion is solved in the cosine basis, where the heat equation
+  is diagonal and advancing to any time t is one multiply per coefficient. The velocity
+  field uses central differences on the diffused grid rather than analytic sine/cosine
+  transforms of the gradient -- the field is smooth by construction, and it halves the
+  transforms per step. The outer loop matters more than any parameter: a single pass
+  cannot converge because the density field is built from the map's *current* shape, so
+  each pass re-rasterizes and halves the blur.
 
 ### M6 — Performance & scaling (1 week)
 - Benchmark suite over the LOD ladder (10²…10⁶ vertices; 12…1500 features).

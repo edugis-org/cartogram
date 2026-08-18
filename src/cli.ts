@@ -10,7 +10,7 @@ Usage:
 
 Options:
   --value <prop>        property holding the cartogram variable (required)
-  --method <name>       identity | olson | dcn | dorling | demers
+  --method <name>       identity | olson | dcn | flow | dorling | demers
                                                               (default olson)
   --fit <total|max>     olson: preserve total area, or keep the largest region
                                                               (default total)
@@ -20,6 +20,11 @@ Options:
   --damping <x>         dcn: step size multiplier              (default 1)
   --shape-anchor <x>    dcn: anti-blob strength, 0..1          (default 0.25)
   --densify <x|off>     vertex spacing before warping          (default auto)
+  --grid <n>            flow: grid size per side, power of two  (default 512)
+  --runs <n>            flow: blur-annealed passes              (default 10)
+  --steps-per-run <n>   flow: integration steps per pass        (default 60)
+  --blur <x>            flow: first-pass blur in cells          (default 4)
+  --padding <x>         flow: domain size vs map size           (default 1.5)
   --fill <x>            dorling/demers: symbol area / map area  (default 0.3)
   --anchor <x>          dorling/demers: pull to true position   (default 0.15)
   --attraction <x>      dorling/demers: pull neighbours together(default 0.3)
@@ -57,6 +62,11 @@ function main(argv: string[]): number {
     ...(num('cutoff') !== undefined ? { cutoff: num('cutoff') } : {}),
     ...(num('damping') !== undefined ? { damping: num('damping') } : {}),
     ...(num('shape-anchor') !== undefined ? { shapeAnchor: num('shape-anchor') } : {}),
+    ...(num('grid') !== undefined ? { grid: num('grid') } : {}),
+    ...(num('runs') !== undefined ? { runs: num('runs') } : {}),
+    ...(num('steps-per-run') !== undefined ? { stepsPerRun: num('steps-per-run') } : {}),
+    ...(num('blur') !== undefined ? { blur: num('blur') } : {}),
+    ...(num('padding') !== undefined ? { padding: num('padding') } : {}),
     ...(num('fill') !== undefined ? { fill: num('fill') } : {}),
     ...(num('anchor') !== undefined ? { anchor: num('anchor') } : {}),
     ...(num('attraction') !== undefined ? { attraction: num('attraction') } : {}),

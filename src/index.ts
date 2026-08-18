@@ -15,6 +15,7 @@ import { chooseProjection, projectInPlace, unprojectInPlace } from './io/project
 import { olson } from './methods/olson.ts';
 import { dcn, DCN_DEFAULTS } from './methods/dcn.ts';
 import { dorling, DORLING_DEFAULTS } from './methods/dorling.ts';
+import { flow, FLOW_DEFAULTS } from './methods/diffusion/index.ts';
 import { cartographicError } from './metrics/area.ts';
 import { topologyError } from './metrics/topology.ts';
 import { shapePreservation } from './metrics/shape.ts';
@@ -75,7 +76,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   // endpoints cuts through its neighbours (F20, Duncan & Gastner 2025). Methods that
   // move whole features rigidly, or replace their geometry outright, cannot bend an
   // edge, so they skip it by default.
-  const warps = options.method === 'dcn';
+  const warps = options.method === 'dcn' || options.method === 'flow';
   const requested = options.densify ?? 'auto';
   const spacing =
     requested === false ? 0 : requested === 'auto' ? (warps ? autoSpacing(packed) : 0) : requested;
@@ -117,6 +118,28 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         meanError: report.meanError,
         converged: report.converged,
         foldRetries: report.foldRetries,
+      };
+      break;
+    }
+    case 'flow': {
+      const report = flow(packed, keptValues, {
+        grid: options.grid ?? FLOW_DEFAULTS.grid,
+        padding: options.padding ?? FLOW_DEFAULTS.padding,
+        targetError: options.targetError ?? FLOW_DEFAULTS.targetError,
+        stepsPerRun: options.stepsPerRun ?? FLOW_DEFAULTS.stepsPerRun,
+        runs: options.runs ?? FLOW_DEFAULTS.runs,
+        blur: options.blur ?? FLOW_DEFAULTS.blur,
+        onIteration: options.onIteration,
+        signal: options.signal,
+      });
+      targetAreas = report.targetAreas;
+      iteration = {
+        iterations: report.steps,
+        meanError: report.meanError,
+        converged: report.converged,
+        foldRetries: 0,
+        diffusionTime: report.time,
+        seaFraction: report.seaFraction,
       };
       break;
     }
