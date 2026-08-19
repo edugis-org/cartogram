@@ -127,3 +127,39 @@ describe('DCT', () => {
     expect(max - min).toBeLessThan(0.2); // nearly uniform
   });
 });
+
+describe('sine reconstruction (for analytic gradients)', () => {
+  it('matches the defining sum', async () => {
+    const { Dct, naiveInverseSine } = await import('../src/methods/diffusion/dct.ts');
+    for (const n of [4, 16, 128]) {
+      const x = random(n, 29);
+      x[0] = 0; // no sine component at k = 0
+      const expected = naiveInverseSine(x);
+      const got = Float64Array.from(x);
+      new Dct(n).inverseSine(got, 0, 1);
+      for (let i = 0; i < n; i++) expect(got[i]).toBeCloseTo(expected[i]!, 8);
+    }
+  });
+
+  it('differentiates a cosine series correctly', async () => {
+    const { Dct } = await import('../src/methods/diffusion/dct.ts');
+    // Take a known field, transform it, differentiate analytically in the spectrum,
+    // and compare against the analytic derivative of the field itself.
+    const n = 128;
+    const field = new Float64Array(n);
+    const k = 3;
+    for (let i = 0; i < n; i++) field[i] = Math.cos((Math.PI * k * (i + 0.5)) / n);
+
+    const dct = new Dct(n);
+    const coeff = Float64Array.from(field);
+    dct.forward(coeff, 0, 1);
+    // d/di cos(pi k (i+1/2)/n) = -(pi k / n) sin(pi k (i+1/2)/n)
+    for (let j = 0; j < n; j++) coeff[j]! *= -((Math.PI * j) / n);
+    dct.inverseSine(coeff, 0, 1);
+
+    for (let i = 5; i < n - 5; i++) {
+      const exact = -((Math.PI * k) / n) * Math.sin((Math.PI * k * (i + 0.5)) / n);
+      expect(coeff[i]).toBeCloseTo(exact, 6);
+    }
+  });
+});

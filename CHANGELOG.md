@@ -19,8 +19,17 @@ to 5.76%, NUTS 0 from 5.51% to 2.44%, and NUTS 0 also 30% faster. The Dutch prov
 unchanged at 0.20%, and no amount of extra integration moves them — see
 `docs/BENCHMARK-GO-CART.md`.
 
+- **The velocity field can be computed analytically** (`gradient: 'analytic'`), by
+  differentiating the cosine series in the spectrum and evaluating the resulting sine
+  series. It is *not* the default: measured, it moves the mean area error on the Dutch
+  provinces from 0.198% to 0.174% and doubles the runtime. That difference is about a
+  twentieth of a pixel on screen.
+
 ### Added
 
+- `docs/READING-THE-METRICS.md`, translating the numbers into what a reader can actually
+  see. Area error is quadratic in perceived size, so a mean below a couple of percent is
+  invisible; the maximum, the rounding metrics and self-intersections are what matter.
 - `goCartCartogram` at `@edugis/cartogram/go-cart`: drives the reference implementation
   (`go-cart-wasm`, an optional peer dependency) through this library's pipeline, returning
   the identical result shape with the same diagnostics and metrics.

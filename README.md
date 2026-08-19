@@ -123,6 +123,16 @@ time), and the flow method is almost flat in both vertex and feature count, beca
 cost is the grid you choose rather than the data you give it. See
 [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) for the tables.
 
+## Reading the metrics
+
+Area error is quadratic in what a reader sees: 0.2% area error is 0.1% of linear scale,
+about 30 m on a 30 km region — a sixteenth of a pixel on a typical screen. Human area
+judgement is far coarser, with a just-noticeable difference around 10–20%. So a **mean**
+area error below a couple of percent is invisible and not worth chasing; the numbers that
+matter are the **maximum** area error (a single region plainly the wrong size), the
+rounding metrics, and self-intersections. See
+[`docs/READING-THE-METRICS.md`](docs/READING-THE-METRICS.md).
+
 ## Review harness
 
 **Live: <https://edugis-org.github.io/cartogram/>**

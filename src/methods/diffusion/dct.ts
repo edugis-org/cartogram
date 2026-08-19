@@ -61,6 +61,34 @@ export class Dct {
   }
 
   /**
+   * Sine counterpart of `inverse`: y[i] = (2/N) sum_{k>=1} Y[k] sin(pi k (i+1/2)/N).
+   * The k = 0 coefficient has no sine component and is ignored.
+   */
+  inverseSine(data: Float64Array, offset: number, stride: number): void {
+    const { n, re, im } = this;
+    // Odd symmetry, Z[2N-k] = -conj(Z[k]), makes the transform purely imaginary; the
+    // sine series is that imaginary part.
+    re.fill(0);
+    im.fill(0);
+    for (let k = 1; k < n; k++) {
+      const y = data[offset + k * stride]!;
+      const c = this.cosHalf[k]!;
+      const s = -this.sinHalf[k]!; // e^{+i pi k / (2N)}
+      const vr = y * c;
+      const vi = y * s;
+      re[k] = vr;
+      im[k] = vi;
+      re[2 * n - k] = -vr;
+      im[2 * n - k] = vi;
+    }
+    // Inverse via conjugation: ifft(z) = conj(fft(conj(z))), so the imaginary part of
+    // the inverse is the negated imaginary part of the forward transform.
+    for (let i = 0; i < 2 * n; i++) im[i] = -im[i]!;
+    this.fft.transform(re, im);
+    for (let i = 0; i < n; i++) data[offset + i * stride] = -im[i]! / n;
+  }
+
+  /**
    * DCT-III, the inverse of DCT-II up to scale:
    * x[n] = (X[0] + 2 sum_{k>=1} X[k] cos(pi k (n + 1/2) / N)) / N.
    */
@@ -92,6 +120,22 @@ export class Dct {
   }
 }
 
+/**
+ * Sine reconstruction: y[i] = (2/N) * sum_{k>=1} Y[k] sin(pi k (i + 1/2) / N).
+ *
+ * The cosine basis diagonalizes the diffusion, so the density is a cosine series; its
+ * derivative is therefore a *sine* series, and this is what evaluates it. That gives
+ * the velocity field analytically instead of by differencing the reconstructed density
+ * on the grid.
+ *
+ * Same 2N FFT as the cosine transforms, with the opposite spectral symmetry: the
+ * odd extension makes the result purely imaginary, and the sine series is its
+ * imaginary part.
+ */
+export function inverseSine(dct: Dct, data: Float64Array, offset: number, stride: number): void {
+  dct.inverseSine(data, offset, stride);
+}
+
 /** Direct evaluation of DCT-II, for validating the fast path. O(n^2). */
 export function naiveDctII(x: Float64Array): Float64Array {
   const n = x.length;
@@ -116,6 +160,18 @@ export function naiveDctIII(x: Float64Array): Float64Array {
   return out;
 }
 
+/** Direct evaluation of the sine reconstruction, for validating the fast path. */
+export function naiveInverseSine(x: Float64Array): Float64Array {
+  const n = x.length;
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    for (let k = 1; k < n; k++) sum += 2 * x[k]! * Math.sin((Math.PI * k * (i + 0.5)) / n);
+    out[i] = sum / n;
+  }
+  return out;
+}
+
 /** 2D DCT-II over a row-major nx by ny grid, in place. */
 export function dct2Forward(grid: Float64Array, nx: number, ny: number, dctX: Dct, dctY: Dct): void {
   for (let y = 0; y < ny; y++) dctX.forward(grid, y * nx, 1);
@@ -126,4 +182,27 @@ export function dct2Forward(grid: Float64Array, nx: number, ny: number, dctX: Dc
 export function dct2Inverse(grid: Float64Array, nx: number, ny: number, dctX: Dct, dctY: Dct): void {
   for (let x = 0; x < nx; x++) dctY.inverse(grid, x, nx);
   for (let y = 0; y < ny; y++) dctX.inverse(grid, y * nx, 1);
+}
+
+/**
+ * Mixed 2D inverse: sine along one axis, cosine along the other. This is what a
+ * partial derivative of a cosine series looks like — sine in the direction
+ * differentiated, cosine in the other.
+ */
+export function dct2InverseMixed(
+  grid: Float64Array,
+  nx: number,
+  ny: number,
+  dctX: Dct,
+  dctY: Dct,
+  sineAxis: 'x' | 'y',
+): void {
+  for (let x = 0; x < nx; x++) {
+    if (sineAxis === 'y') dctY.inverseSine(grid, x, nx);
+    else dctY.inverse(grid, x, nx);
+  }
+  for (let y = 0; y < ny; y++) {
+    if (sineAxis === 'x') dctX.inverseSine(grid, y * nx, 1);
+    else dctX.inverse(grid, y * nx, 1);
+  }
 }
