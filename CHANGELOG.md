@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.2 — 2026-08-20
+
+Work in progress: the flow method changed substantially, and the numbers moved in both
+directions on purpose. See `docs/BENCHMARK-GO-CART.md`.
+
+### Fixed
+
+- **Multipart features were treated as a single point.** Olson scaled every part of a
+  feature about the feature's combined centroid; France is thirteen polygons whose
+  combined centre lies 942 km from mainland France, so its remote islands were hurled
+  across the map in proportion to their distance. Each part is now scaled about its own
+  centre, with the factor still taken from the feature's total area. Dorling anchors its
+  symbol on the largest part rather than the combined centroid, and the force method
+  takes its force sources per part (`sources: 'part' | 'feature'`).
+- **Regions smaller than a grid cell inflated the flow's density field.** Each was given
+  a full cell's worth of mass, which on NUTS 3 grew the total land area sixfold and
+  compressed the surrounding ocean, dragging French Guiana thousands of kilometres
+  towards Europe. Unresolvable regions are now mass-neutral. The median NUTS 3 region
+  now moves 205 km rather than 1342 km, against 200 km for the reference implementation.
+- **The finished map drifted in scale and position.** A cartogram fixes relative areas
+  and leaves both free, and normalized area error cannot see either. Warp methods now
+  match the input's total area and centre of mass (`preserveTotalArea`).
+- The harness refused to draw go-cart's world map, and the dev server 404'd at `/`.
+
+### Added
+
+- Progressive grid refinement in the flow method: the grid starts at 128 and doubles
+  each pass, with the blur schedule following it. Faster everywhere and more accurate on
+  the harder maps.
+- `goCartCartogram` at `@edugis/cartogram/go-cart` and the harness can run it as a
+  method, so the reference implementation can be compared by eye rather than only in a
+  table.
+- `rewind`, `polygonArea`, `polygonCentroid`, `similarity`, `centreOfMass`,
+  `selfIntersections` exported.
+- `docs/READING-THE-METRICS.md` and `docs/BENCHMARK-GO-CART.md`.
+
 ## Unreleased
 
 ### Changed
