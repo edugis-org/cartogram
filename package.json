@@ -1,6 +1,6 @@
 {
   "name": "@edugis/cartogram",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Turn GeoJSON into cartograms. Browser-compatible, dependency-free TypeScript.",
   "type": "module",
   "license": "MIT",
