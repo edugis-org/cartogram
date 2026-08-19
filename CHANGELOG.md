@@ -36,8 +36,6 @@ directions on purpose. See `docs/BENCHMARK-GO-CART.md`.
   `selfIntersections` exported.
 - `docs/READING-THE-METRICS.md` and `docs/BENCHMARK-GO-CART.md`.
 
-## Unreleased
-
 ### Changed
 
 - **The flow method now integrates adaptively.** Heun with the Euler result it contains
@@ -72,7 +70,7 @@ unchanged at 0.20%, and no amount of extra integration moves them — see
   is now capped at the region's own area, so flooring can only prevent shrinkage. It
   previously blew a 12 km² London borough up to 21887 km².
 
-### Added
+### Also in this release
 
 - `docs/READING-THE-METRICS.md`, translating the numbers into what a reader can actually
   see. Area error is quadratic in perceived size, so a mean below a couple of percent is
