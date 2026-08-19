@@ -52,6 +52,20 @@ and every one of them reports exactly 100%. The mean error is 35.3% under `zero`
 at all under `drop`. `drop` is the honest policy for genuinely unknown values; `zero`
 belongs to values that really are zero.
 
+## Overall size is not measured at all
+
+Area error is computed from normalized shares, so it is blind to the map's overall
+scale: a cartogram twice the size of its input, with every region in perfect relative
+proportion, scores zero error. The warp methods do drift — before this was pinned, the
+flow method came out at 1.50x the input's total area on NUTS 2 and the force method at
+0.88x — and it is glaring the moment the result is put beside the original or morphed
+into it, which is exactly how the harness shows it.
+
+Both warp methods now rescale their output so the total area matches the input's
+(`preserveTotalArea`, on by default). It is a uniform scale about the map's centre, so
+nothing else moves: relative areas, shapes, compactness, adjacency and
+self-intersections are all unchanged.
+
 ## What this means for tuning
 
 Two hours were spent taking the flow method from 0.198% to 0.174% mean area error on the

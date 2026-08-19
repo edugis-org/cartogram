@@ -49,6 +49,20 @@ export interface CommonOptions {
    */
   densify?: 'auto' | number | false;
   /**
+   * Rescale the finished cartogram so its total area matches the input's. Default
+   * `true` for the warp-based methods.
+   *
+   * A cartogram fixes the *relative* areas of regions; nothing in the mathematics pins
+   * the overall size, and the warp methods drift — measured on NUTS 2, the flow method
+   * came out 1.50x the input's total area and the force method 0.88x. That is invisible
+   * in the area error, which is computed from normalized shares, but it is very visible
+   * on screen when the result is placed beside the original or morphed into it.
+   *
+   * The correction is a uniform scale about the map's centre, so relative areas,
+   * shapes, topology and every shape metric are untouched.
+   */
+  preserveTotalArea?: boolean;
+  /**
    * Also return the projected (and densified) input geometry as `result.baseline`.
    * Needed to compare or morph input against output vertex for vertex, since
    * densification changes the vertex count. Default `false`.

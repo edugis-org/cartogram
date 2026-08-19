@@ -159,3 +159,17 @@ export function bbox(g: FlatGeometry): [number, number, number, number] {
   }
   return [minX, minY, maxX, maxY];
 }
+
+/**
+ * Scale every coordinate about a point, in place.
+ *
+ * A similarity transform: relative areas, shapes, compactness, adjacency and
+ * self-intersections are all unaffected. Only the map's overall size changes.
+ */
+export function scaleAbout(g: FlatGeometry, cx: number, cy: number, factor: number): void {
+  if (factor === 1) return;
+  for (let i = 0; i < g.coords.length; i += 2) {
+    g.coords[i] = cx + (g.coords[i]! - cx) * factor;
+    g.coords[i + 1] = cy + (g.coords[i + 1]! - cy) * factor;
+  }
+}

@@ -8,7 +8,7 @@ import type {
 } from './types.ts';
 import { pack, unpack, cloneCoords, vertexCount } from './geometry/flat.ts';
 import { densify, autoSpacing } from './topology/densify.ts';
-import { allFeatureAreas } from './geometry/area.ts';
+import { allFeatureAreas, bbox, scaleAbout } from './geometry/area.ts';
 import { partition } from './io/validate.ts';
 import { extractValues } from './io/values.ts';
 import { chooseProjection, projectInPlace, unprojectInPlace } from './io/project.ts';
@@ -24,7 +24,7 @@ import { selfIntersections } from './metrics/validity.ts';
 
 export * from './types.ts';
 export { pack, unpack } from './geometry/flat.ts';
-export { featureArea, featureCentroid, allFeatureAreas, bbox } from './geometry/area.ts';
+export { featureArea, featureCentroid, allFeatureAreas, bbox, scaleAbout } from './geometry/area.ts';
 export { cartographicError } from './metrics/area.ts';
 export { topologyError, adjacency } from './metrics/topology.ts';
 export { shapePreservation, compactness, featurePerimeter } from './metrics/shape.ts';
@@ -192,6 +192,21 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     }
   }
   const runtimeMs = now() - t0;
+
+  // Pin the overall size. A cartogram determines relative areas; the absolute scale is
+  // free, and the warp methods drift away from the input's total area (measured on
+  // NUTS 2: 1.50x for the flow method, 0.88x for the force method). Normalized area
+  // error cannot see that, but a reader comparing the result against the original map
+  // certainly can.
+  const rescales = options.method === 'flow' || options.method === 'dcn';
+  if (rescales && (options.preserveTotalArea ?? true)) {
+    const inputTotal = inputAreas.reduce((a, b) => a + b, 0);
+    const outputTotal = allFeatureAreas(packed).reduce((a, b) => a + b, 0);
+    if (inputTotal > 0 && outputTotal > 0) {
+      const [minX, minY, maxX, maxY] = bbox(packed);
+      scaleAbout(packed, (minX + maxX) / 2, (minY + maxY) / 2, Math.sqrt(inputTotal / outputTotal));
+    }
+  }
 
   // --- measure (in the projected plane, before unprojecting) ------------------
   const outputAreas = allFeatureAreas(packed);

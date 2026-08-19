@@ -192,3 +192,35 @@ describe('the value floor cannot inflate a region', () => {
     expect(s.outputArea / s.inputArea).toBeLessThan(20);
   });
 });
+
+describe('overall scale', () => {
+  it('keeps the cartogram the same total size as the input map', () => {
+    // A cartogram fixes relative areas; the absolute scale is free, and the warp drifts
+    // — measured at 1.50x the input's total area on NUTS 2 before this was pinned.
+    // Normalized area error cannot see it; a reader comparing against the original can.
+    const input = grid([[1, 9, 1], [9, 1, 9], [1, 9, 1]]);
+    const r = cartogram(input, {
+      method: 'flow', value: 'value', projection: 'none', grid: 128,
+      includeBaseline: true,
+    } as never);
+
+    const total = (fc: { features: { geometry: unknown }[] }) =>
+      r.diagnostics.reduce((s, d) => s + d.outputArea, 0);
+    const inputTotal = r.diagnostics.reduce((s, d) => s + d.inputArea, 0);
+    expect(total(r.featureCollection as never) / inputTotal).toBeCloseTo(1, 2);
+  });
+
+  it('can be switched off', () => {
+    const input = grid([[1, 9], [9, 1]]);
+    const scaled = cartogram(input, {
+      method: 'flow', value: 'value', projection: 'none', grid: 128,
+      preserveTotalArea: false,
+    } as never);
+    // Relative areas are identical either way; only the overall size differs.
+    const pinned = cartogram(input, {
+      method: 'flow', value: 'value', projection: 'none', grid: 128,
+    } as never);
+    const ratio = (r: typeof pinned) => r.diagnostics[0]!.outputArea / r.diagnostics[1]!.outputArea;
+    expect(ratio(scaled)).toBeCloseTo(ratio(pinned), 6);
+  });
+});

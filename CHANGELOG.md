@@ -25,6 +25,17 @@ unchanged at 0.20%, and no amount of extra integration moves them — see
   provinces from 0.198% to 0.174% and doubles the runtime. That difference is about a
   twentieth of a pixel on screen.
 
+- **The warp methods now preserve the map's total area** (`preserveTotalArea`, default
+  on). A cartogram fixes *relative* areas and leaves the absolute scale free, so the
+  warps drifted: on NUTS 2 the flow method produced 1.50x the input's total area and
+  the force method 0.88x. Normalized area error is blind to this; a reader comparing
+  the result with the original is not. The correction is a uniform scale about the
+  map's centre, so nothing else changes.
+- **The value floor no longer inflates regions.** It gives every region a target of at
+  least one grid cell so that sub-cell regions do not compound away to nothing, but it
+  is now capped at the region's own area, so flooring can only prevent shrinkage. It
+  previously blew a 12 km² London borough up to 21887 km².
+
 ### Added
 
 - `docs/READING-THE-METRICS.md`, translating the numbers into what a reader can actually
