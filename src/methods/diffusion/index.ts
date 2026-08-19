@@ -159,33 +159,57 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   }
   for (let f = 0; f < n; f++) target[f] = (areaSum * effective[f]!) / effectiveSum;
 
-  const size = params.grid;
-  const dct = new Dct(size);
-  const k2 = new Float64Array(size);
-  const kx = new Float64Array(size);
-  for (let k = 0; k < size; k++) {
-    kx[k] = (Math.PI * k) / size;
-    k2[k] = kx[k]! * kx[k]!;
+  // Progressive resolution. The early passes run with a wide blur, which throws away
+  // the fine detail of the field anyway, so resolving it is wasted work: a pass at 128
+  // costs about a twentieth of one at 512, since the transforms go as N^2 log N. The
+  // grid doubles each pass up to the requested one, and the blur halves alongside it,
+  // so the two stay in step.
+  const sizes: number[] = [];
+  for (let run = 0, size = Math.min(128, params.grid); run < params.runs; run++) {
+    sizes.push(size);
+    size = Math.min(params.grid, size * 2);
   }
 
-  const rho = new Float64Array(size * size);
-  // Two velocity fields: the one at the current time, and the one at the end of the
-  // trial step. Heun needs both, and after an accepted step the second becomes the
-  // first, so a step costs exactly one new field evaluation.
-  const vxA = new Float64Array(size * size);
-  const vyA = new Float64Array(size * size);
-  const vxB = new Float64Array(size * size);
-  const vyB = new Float64Array(size * size);
-  const scratch = new Float64Array(size * size);
-  const gradScratch = new Float64Array(size * size);
+  const dcts = new Map<number, Dct>();
+  const wavenumbers = new Map<number, { k2: Float64Array; kx: Float64Array }>();
+  const buffers = new Map<number, {
+    rho: Float64Array; vxA: Float64Array; vyA: Float64Array;
+    vxB: Float64Array; vyB: Float64Array; scratch: Float64Array; gradScratch: Float64Array;
+  }>();
+  const forSize = (size: number) => {
+    let dct = dcts.get(size);
+    if (!dct) {
+      dct = new Dct(size);
+      dcts.set(size, dct);
+      const k2 = new Float64Array(size);
+      const kx = new Float64Array(size);
+      for (let k = 0; k < size; k++) {
+        kx[k] = (Math.PI * k) / size;
+        k2[k] = kx[k]! * kx[k]!;
+      }
+      wavenumbers.set(size, { k2, kx });
+      buffers.set(size, {
+        rho: new Float64Array(size * size),
+        vxA: new Float64Array(size * size),
+        vyA: new Float64Array(size * size),
+        vxB: new Float64Array(size * size),
+        vyB: new Float64Array(size * size),
+        scratch: new Float64Array(size * size),
+        gradScratch: new Float64Array(size * size),
+      });
+    }
+    return { dct, ...wavenumbers.get(size)!, ...buffers.get(size)! };
+  };
+
+  // Two velocity fields per resolution: the one at the current time, and the one at
+  // the end of the trial step. Heun needs both, and after an accepted step the second
+  // becomes the first, so a step costs exactly one new field evaluation.
   const vertexCount = g.coords.length >>> 1;
   const px = new Float64Array(vertexCount);
   const py = new Float64Array(vertexCount);
   const trialX = new Float64Array(vertexCount);
   const trialY = new Float64Array(vertexCount);
 
-  const tRelax = (size / Math.PI) * (size / Math.PI);
-  const tMax = 8 * tRelax;
 
   let meanError = errorOf(allFeatureAreas(g), target);
   let converged = meanError <= params.targetError;
@@ -198,13 +222,24 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   for (let run = 0; run < params.runs && !converged; run++) {
     if (params.signal?.aborted) break;
 
+    const size = sizes[run]!;
+    const { dct, k2, kx, rho, vxA, vyA, vxB, vyB, scratch, gradScratch } = forSize(size);
+    const tRelax = (size / Math.PI) * (size / Math.PI);
+    const tMax = 8 * tRelax;
+
     const grid = buildDensityGrid(g, effective, size, params.padding);
     seaFraction = grid.seaFraction;
     underResolved = grid.underResolved;
     const coeff = Float64Array.from(grid.rho);
     dct2Forward(coeff, size, size, dct, dct);
 
-    const blur = params.blur * Math.pow(0.5, run);
+    // Blur is in cells, so it must not shrink faster than the cells do: while the grid
+    // is still doubling, a constant number of cells is already a halving in map units.
+    // Blur is measured in cells, so while the grid is still doubling a constant cell
+    // count already halves the blur in map units. Once the grid stops growing, the
+    // cell count itself has to halve to keep annealing. Indexing from where this
+    // resolution *starts* is what makes the two schedules line up.
+    const blur = params.blur * Math.pow(0.5, Math.max(0, run - sizes.indexOf(size)));
     if (blur > 0.05) {
       const sigmaT = (blur * blur) / 2;
       for (let y = 0; y < size; y++) {

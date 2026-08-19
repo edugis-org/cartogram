@@ -97,8 +97,12 @@ export function runOptions(spec: RunSpec): CartogramOptions {
   } as CartogramOptions;
 }
 
-export function buildScene(fc: FeatureCollection, spec: RunSpec): { scene: Scene; result: CartogramResult } {
-  return sceneFromResult(cartogram(fc, runOptions(spec)), spec);
+export function buildScene(
+  fc: FeatureCollection,
+  spec: RunSpec,
+  precomputed?: CartogramResult,
+): { scene: Scene; result: CartogramResult } {
+  return sceneFromResult(precomputed ?? cartogram(fc, runOptions(spec)), spec);
 }
 
 /** Assemble the renderer's view of a finished run. */
@@ -111,10 +115,16 @@ export function sceneFromResult(
   const gB = pack(areaFeatures(result.featureCollection));
 
   // Methods that move geometry keep the vertex layout, so the two sides can be
-  // interpolated directly. Methods that *replace* geometry (Dorling, Demers) cannot
-  // be morphed: the renderer switches between the two instead. Silently interpolating
-  // mismatched buffers is the failure this check exists to prevent.
-  const replaces = spec.method === 'dorling' || spec.method === 'demers';
+  // interpolated directly. Methods that *replace* geometry cannot be morphed: the
+  // renderer switches between the two instead. Silently interpolating mismatched
+  // buffers is the failure this check exists to prevent.
+  //
+  // Dorling and Demers replace geometry by construction. go-cart-wasm reconstructs its
+  // own polygons and densifies them as it sees fit, so its vertex count matches the
+  // input only by coincidence — it did on the smaller maps and not on world countries,
+  // where the guard fired and nothing was drawn.
+  const replaces =
+    spec.method === 'dorling' || spec.method === 'demers' || spec.method === 'go-cart';
   if (!replaces && gA.coords.length !== gB.coords.length) {
     throw new Error(
       `harness: geometry mismatch (${gA.coords.length} vs ${gB.coords.length} coordinates); ` +

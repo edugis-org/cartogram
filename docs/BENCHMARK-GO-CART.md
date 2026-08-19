@@ -14,27 +14,32 @@ definition of "area error" is being quoted.
 
 | dataset | implementation | ms | area err | max err | topology | rounding | detail | self-int |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| nl-provinces | ours (grid 256) | 1337 | 0.75% | 6.0% | 0.000 | +0.041 | 1.06 | 0 |
-| nl-provinces | ours (grid 512) | 7012 | 0.20% | 1.7% | 0.000 | +0.041 | 1.07 | 0 |
-| nl-provinces | **go-cart-wasm** | 2010 | **0.03%** | 0.1% | 0.000 | +0.040 | 1.06 | 0 |
-| nuts0 | ours (grid 256) | 2829 | 4.43% | 90.4% | 0.000 | +0.028 | 1.08 | 0 |
-| nuts0 | ours (grid 512) | 14082 | 2.44% | 65.3% | 0.000 | +0.027 | 1.08 | 0 |
-| nuts0 | **go-cart-wasm** | 23477 | **1.21%** | 43.2% | 0.000 | +0.033 | 1.12 | 2 |
-| nuts2-20m | ours (grid 256) | 4620 | 11.10% | 93.1% | 0.000 | +0.059 | 1.18 | 1 |
-| nuts2-20m | **ours (grid 512)** | 17750 | **3.04%** | 76.6% | 0.000 | +0.069 | 1.16 | 1 |
-| nuts2-20m | go-cart-wasm | 2204 | 11.95% | 99.1% | 0.000 | +0.059 | 1.15 | 3 |
-| world-110m | ours (grid 256) | 5020 | 14.01% | 100.0% | 0.000 | +0.059 | 1.26 | 5 |
-| world-110m | **ours (grid 512)** | 25017 | **5.76%** | 100.0% | 0.000 | +0.062 | 1.27 | 18 |
-| world-110m | go-cart-wasm | 35324 | 10.39% | 100.0% | 0.000 | +0.075 | 1.32 | 116 |
+| nl-provinces | ours (grid 256) | 1114 | 0.53% | 4.5% | 0.000 | +0.024 | 1.05 | 0 |
+| nl-provinces | ours (grid 512) | 3420 | 0.48% | 4.1% | 0.000 | +0.024 | 1.05 | 0 |
+| nl-provinces | **go-cart-wasm** | 1962 | **0.03%** | 0.1% | 0.000 | +0.040 | 1.06 | 0 |
+| nuts0 | ours (grid 256) | 2558 | 2.26% | 48.1% | 0.000 | +0.023 | 1.07 | 0 |
+| nuts0 | **ours (grid 512)** | 11270 | **1.02%** | 17.7% | 0.000 | +0.024 | 1.07 | 0 |
+| nuts0 | go-cart-wasm | 23534 | 1.21% | 43.2% | 0.000 | +0.033 | 1.12 | 2 |
+| nuts2-20m | ours (grid 256) | 4047 | 8.67% | 77.3% | 0.000 | +0.064 | 1.17 | 1 |
+| nuts2-20m | **ours (grid 512)** | 15226 | **2.33%** | 73.3% | 0.000 | +0.076 | 1.17 | 1 |
+| nuts2-20m | go-cart-wasm | 2194 | 11.95% | 99.1% | 0.000 | +0.059 | 1.15 | 3 |
+| world-110m | ours (grid 256) | 4174 | 11.81% | 100.0% | 0.000 | +0.058 | 1.27 | 5 |
+| world-110m | **ours (grid 512)** | 18642 | **6.17%** | 100.0% | 0.000 | +0.058 | 1.28 | 22 |
+| world-110m | go-cart-wasm | 35056 | 10.39% | 100.0% | 0.000 | +0.075 | 1.32 | 116 |
 
-Measured after implementing the adaptive integrator and taking region density from exact
-polygon areas. The earlier figures, for reference, were 0.20 / 5.51 / 9.11 / 8.01 percent
-for the four datasets at grid 512.
+Measured after the adaptive integrator, exact-area density, and progressive grid
+refinement. For reference, the figures at grid 512 before that work were 0.20 / 5.51 /
+9.11 / 8.01 percent, taking 5.4 / 19.6 / 21.3 / 22.9 seconds.
+
+Note that the Dutch provinces got *worse*, from 0.20% to 0.48%, in exchange for being
+twice as fast. Both figures are a fraction of a pixel of linear error, so the trade is
+worth taking — see [`READING-THE-METRICS.md`](READING-THE-METRICS.md).
 
 ## What it says
 
-**They remain ahead on well-behaved maps.** On the Dutch provinces they reach 0.03%
-area error against our 0.20%, and on NUTS 0 1.21% against our 2.44%. Our figure on the
+**They remain ahead on the smallest map.** On the Dutch provinces they reach 0.03% area
+error against our 0.48%. On NUTS 0 we have since passed them: 1.02% against 1.21%, in
+half the time. Our figure on the
 provinces will not improve with more integration: tightening the step tolerance from
 0.02 to 0.002 cells, the error target from 1% to 0.02%, and raising the pass count all
 leave it at 0.15–0.20%. Something other than the integrator sets that floor, and the
@@ -42,8 +47,8 @@ likeliest candidate is the velocity field, which we obtain by central difference
 diffused grid and sample bilinearly, where go_cart takes it analytically from sine and
 cosine transforms of the gradient. That is the next thing to try.
 
-**On hard maps we are now well ahead.** NUTS 2: 3.04% for us against 11.95% for them.
-World countries: 5.76% against 10.39%. These are the maps full of regions smaller than a
+**On hard maps we are well ahead.** NUTS 2: 2.33% for us against 11.95% for them.
+World countries: 6.17% against 10.39%. These are the maps full of regions smaller than a
 grid cell, where the guaranteed-one-cell allocation, the value floor, and taking density
 from exact polygon areas are all doing real work.
 

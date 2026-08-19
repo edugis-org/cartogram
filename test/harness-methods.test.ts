@@ -35,6 +35,23 @@ describe('harness method wiring', () => {
     expect(options.includeBaseline).toBe(true);
   });
 
+  it.skipIf(!process.env.GO_CART)('builds a scene for go-cart even when it changes the vertex count', async () => {
+    // go-cart reconstructs its own polygons and prunes degenerate vertices, so its
+    // output matches the input's vertex count only by coincidence: it did on the Dutch
+    // provinces (1608 either way) and did not on world countries (10365 -> 10362),
+    // where the morph-alignment guard fired and the map was simply not drawn.
+    const { buildScene } = await import('../harness/scene.ts');
+    const initGoCart = (await import('go-cart-wasm')).default;
+    const goCart = await initGoCart({ locateFile: (p: string) => `${process.cwd()}/node_modules/go-cart-wasm/dist/${p}` });
+    const world = JSON.parse(readFileSync('data/real/world-110m.geojson', 'utf8'));
+
+    const { goCartCartogram: run } = await import('../src/backends/go-cart.ts');
+    const result = run(world, { goCart: goCart as never, value: 'POP_EST', missing: 'drop', negative: 'clamp', unproject: false, includeBaseline: true });
+    const built = buildScene(world, { value: 'POP_EST', method: 'go-cart', missing: 'drop' }, result);
+    expect(built.scene.morphable).toBe(false);
+    expect(built.scene.geomB.featCount).toBe(built.scene.geomA.featCount);
+  });
+
   it.skipIf(!process.env.GO_CART)('produces a comparable result through the backend', async () => {
     const initGoCart = (await import('go-cart-wasm')).default;
     const goCart = await initGoCart({ locateFile: (p: string) => `${process.cwd()}/node_modules/go-cart-wasm/dist/${p}` });
