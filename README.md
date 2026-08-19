@@ -150,6 +150,9 @@ npm run harness      # http://localhost:5174/harness/
 - ghost outline of the original, adjacency-graph overlay, choropleth by area error or by
   grew/shrank, hover for per-feature value, area ratio and error
 - live metrics panel, including the anti-blob guard (compactness drift, detail retention)
+- **the reference implementation as a sixth method**: `go-cart-wasm` runs alongside the
+  built-in ones, on the same data and scored with the same metrics, so the two can be
+  compared by eye rather than only in a table
 - **verdict capture**: recognizable / borderline / unusable plus notes, written with the
   run's metrics to `harness/verdicts.json` so a change that quietly ruins the maps shows up
   as a regression rather than being discovered by chance

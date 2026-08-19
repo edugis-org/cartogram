@@ -102,6 +102,9 @@ export default defineConfig({
   // Pages, a subdirectory, or opened straight off disk.
   base: './',
   server: { open: '/harness/', port: 5174 },
+  // Workers must be ES modules: the harness worker pulls in go-cart-wasm, which Rollup
+  // code-splits, and the default IIFE worker output cannot represent multiple chunks.
+  worker: { format: 'es' },
   build: {
     outDir: OUT_DIR,
     emptyOutDir: true,

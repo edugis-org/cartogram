@@ -61,6 +61,11 @@ run first, so a broken library is not deployed as a working app.
 credits panel; keep it. Natural Earth is public domain and needs none. Full provenance is
 in [`data/SOURCES.md`](../data/SOURCES.md).
 
+The app also bundles `go-cart-wasm` (about 690 kB of WebAssembly) so the reference
+implementation can be compared side by side. That is an app-only dependency: the
+published library treats it as an optional peer and pulls in nothing unless the caller
+asks for the `@edugis/cartogram/go-cart` entry point.
+
 **Note on the verdict store**: recording review verdicts is a dev-server feature — it
 writes `harness/verdicts.json` through a Vite middleware. The built app has no server, so
 the verdict buttons will report the store as unavailable. That is intended: verdicts are a

@@ -1,6 +1,6 @@
 import type { FeatureCollection } from 'geojson';
-import type { CartogramResult, MethodName, MissingPolicy, ProjectionName } from '../src/types.ts';
-import { runOptions, sceneFromResult, type RunSpec } from './scene.ts';
+import type { CartogramResult, MissingPolicy, ProjectionName } from '../src/types.ts';
+import { runOptions, sceneFromResult, type HarnessMethod, type RunSpec } from './scene.ts';
 import { CartogramWorker } from '../src/worker/client.ts';
 import { DATASETS } from './datasets.ts';
 import {
@@ -22,6 +22,8 @@ const els = {
   dorlingParams: $('dorling-params'),
   flowParams: $('flow-params'),
   grid: $<HTMLSelectElement>('grid'),
+  gradient: $<HTMLSelectElement>('gradient'),
+  tolerance: $<HTMLInputElement>('tolerance'),
   runs: $<HTMLInputElement>('runs'),
   blur: $<HTMLInputElement>('blur'),
   fill: $<HTMLInputElement>('fill'),
@@ -50,8 +52,9 @@ const els = {
 const cache = new Map<string, FeatureCollection>();
 // Runs go to a worker: a flow cartogram at grid 512 takes seconds, and on the main
 // thread that is a frozen page with no way to tell whether it is working or hung.
+// The harness's own worker, which additionally knows how to drive go-cart-wasm.
 const worker = new CartogramWorker(
-  () => new Worker(new URL('../src/worker/cartogram.worker.ts', import.meta.url), { type: 'module' }),
+  () => new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }),
 );
 let inFlight: AbortController | undefined;
 let scene: Scene | null = null;
@@ -73,7 +76,7 @@ function runKey(): string {
       : els.method.value === 'dorling' || els.method.value === 'demers'
         ? `it${els.iterations.value} fill${els.fill.value}`
         : els.method.value === 'flow'
-          ? `g${els.grid.value} runs${els.runs.value} blur${els.blur.value}`
+          ? `g${els.grid.value} runs${els.runs.value} blur${els.blur.value} ${els.gradient.value} tol${els.tolerance.value}`
           : '-',
     els.projection.value,
     els.missing.value,
@@ -118,7 +121,7 @@ async function run(): Promise<void> {
 
   const runSpec: RunSpec = {
     value: els.attribute.value,
-    method: els.method.value as MethodName,
+    method: els.method.value as HarnessMethod,
     fit: els.fit.value as 'total' | 'max',
     projection: els.projection.value as ProjectionName,
     missing: els.missing.value as MissingPolicy,
@@ -469,7 +472,7 @@ function syncMethodControls(): void {
 for (const el of [
   els.attribute, els.missing, els.method, els.fit, els.projection,
   els.iterations, els.shapeAnchor, els.cutoff, els.damping, els.fill,
-  els.grid, els.runs, els.blur,
+  els.grid, els.runs, els.blur, els.gradient, els.tolerance,
 ]) {
   el.addEventListener('change', () => {
     syncMethodControls();

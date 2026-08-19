@@ -13,7 +13,9 @@ const main = readFileSync('harness/main.ts', 'utf8');
  */
 describe('harness markup matches the script', () => {
   it('offers every cartogram method', () => {
-    for (const method of ['identity', 'olson', 'dcn', 'flow', 'dorling', 'demers']) {
+    // 'go-cart' is a harness-only method: the reference implementation, driven through
+    // the backend rather than being one of the library's own.
+    for (const method of ['identity', 'olson', 'dcn', 'flow', 'dorling', 'demers', 'go-cart']) {
       expect(html, `method '${method}' missing from the method dropdown`).toContain(
         `value="${method}"`,
       );

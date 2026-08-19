@@ -11,9 +11,12 @@ import type {
 } from '../src/types.ts';
 import type { Scene } from './render.ts';
 
+/** The harness can also run the reference implementation, which is not a library method. */
+export type HarnessMethod = MethodName | 'go-cart';
+
 export interface RunSpec {
   value: string;
-  method: MethodName;
+  method: HarnessMethod;
   fit?: 'total' | 'max';
   projection?: ProjectionName;
   missing?: MissingPolicy;
@@ -25,6 +28,8 @@ export interface RunSpec {
   grid?: number;
   runs?: number;
   blur?: number;
+  gradient?: 'analytic' | 'differences';
+  tolerance?: number;
 }
 
 export function areaFeatures(fc: FeatureCollection): AreaFeature[] {
@@ -77,6 +82,8 @@ export function runOptions(spec: RunSpec): CartogramOptions {
           ...(spec.grid !== undefined ? { grid: spec.grid } : {}),
           ...(spec.runs !== undefined ? { runs: spec.runs } : {}),
           ...(spec.blur !== undefined ? { blur: spec.blur } : {}),
+          ...(spec.gradient !== undefined ? { gradient: spec.gradient } : {}),
+          ...(spec.tolerance !== undefined ? { tolerance: spec.tolerance } : {}),
         }
       : {}),
     ...(spec.method === 'dcn'
