@@ -20,6 +20,7 @@ const els = {
   fitRow: $('fit-row'),
   dcnParams: $('dcn-params'),
   dorlingParams: $('dorling-params'),
+  gocartParams: $('gocart-params'),
   flowParams: $('flow-params'),
   grid: $<HTMLSelectElement>('grid'),
   gradient: $<HTMLSelectElement>('gradient'),
@@ -188,6 +189,7 @@ function showMetrics(r: CartogramResult): void {
   const m = r.metrics;
   const pct = (x: number) => `${(x * 100).toFixed(3)}%`;
   const parts = [
+    metric('runtime', `${m.runtimeMs < 1000 ? m.runtimeMs.toFixed(0) + ' ms' : (m.runtimeMs / 1000).toFixed(1) + ' s'}`),
     metric('area error mean', pct(m.areaError.mean), m.areaError.mean < 0.01 ? 'good' : 'bad'),
     metric('area error p90', pct(m.areaError.p90)),
     metric('area error max', pct(m.areaError.max)),
@@ -471,6 +473,7 @@ function syncMethodControls(): void {
   els.dcnParams.style.display = m === 'dcn' ? '' : 'none';
   els.dorlingParams.style.display = m === 'dorling' || m === 'demers' ? '' : 'none';
   els.flowParams.style.display = m === 'flow' ? '' : 'none';
+  els.gocartParams.style.display = m === 'go-cart' ? '' : 'none';
 }
 
 for (const el of [

@@ -47,10 +47,20 @@ World countries: 5.76% against 10.39%. These are the maps full of regions smalle
 grid cell, where the guaranteed-one-cell allocation, the value floor, and taking density
 from exact polygon areas are all doing real work.
 
+**Compare like for like on the grid.** go-cart-wasm is fixed at 512, so only the
+"ours (grid 512)" rows are a fair speed comparison. In the review harness, where the
+flow method defaults to grid 256, go-cart looks about ten times slower on NUTS 0 (25 s
+against 2 s) — but a quarter of that gap is simply that our method is doing a quarter of
+the grid work at 256.
+
 **Runtime is not a straight win for either.** They are faster on the provinces (2.0 s
 against 7.0 s) and dramatically faster on NUTS 2 (2.2 s against 17.8 s), but slower on
-NUTS 0 (23.5 s against 14.1 s) and on the world map (35.3 s against 25.0 s). Their cost
-clearly adapts to the data; ours is fixed by the grid the caller chooses. Comparing at
+NUTS 0 (23.5 s against 14.1 s) and on the world map (35.3 s against 25.0 s). Their cost varies far more with
+the data than ours does: on NUTS 2, with 334 regions, go-cart takes about 2 s, while on
+NUTS 0, with only 37, it takes 23 s. The likely reason is the shape of the data rather
+than its size — NUTS 0 spans from the Azores to Réunion, so the fixed 512 grid is mostly
+empty ocean with a few tiny islands in it, and their convergence test has to work hard.
+Ours is set by the grid the caller chooses and barely moves with the data. Comparing at
 equal grid resolution is not possible — go-cart-wasm does not expose one.
 
 **Shape and topology agree closely**, which is reassuring for both: topology error is

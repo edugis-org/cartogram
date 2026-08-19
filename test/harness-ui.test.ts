@@ -57,7 +57,7 @@ describe('harness markup matches the script', () => {
   });
 
   it('has a parameter panel per parameterised method', () => {
-    for (const id of ['fit-row', 'dcn-params', 'dorling-params', 'flow-params']) {
+    for (const id of ['fit-row', 'dcn-params', 'dorling-params', 'flow-params', 'gocart-params']) {
       expect(html).toContain(`id="${id}"`);
     }
   });
