@@ -1,6 +1,8 @@
 import type { FlatGeometry } from '../geometry/flat.ts';
 import { ringRange } from '../geometry/flat.ts';
-import { allFeatureAreas, featureCentroid, ringSignedArea } from '../geometry/area.ts';
+import {
+  allFeatureAreas, featureCentroid, polygonArea, polygonCentroid, ringSignedArea,
+} from '../geometry/area.ts';
 import { buildVertexIndex, scatter, type VertexIndex } from '../topology/vertices.ts';
 
 export interface DcnParams {
@@ -35,6 +37,21 @@ export interface DcnParams {
    * scale. 0 disables it and reproduces textbook DCN behaviour, blobbing included.
    */
   shapeAnchor: number;
+  /**
+   * Where each region's force acts from. Default `part`.
+   *
+   * - `part` — every polygon of a multipart feature pushes from its own centre, while
+   *   how much it must grow or shrink comes from the feature's total area. Physically
+   *   the right answer: France is thirteen polygons whose combined centre lies 942 km
+   *   from mainland France, well inside the radius its force acts over.
+   * - `feature` — one source per feature, at its combined centroid. Fewer, smoother
+   *   force sources.
+   *
+   * Measured on world countries, `part` takes the area error from 28.7% to 16.6% and
+   * the self-intersection count from 342 to 2198. Both are visible defects, so this is
+   * a genuine choice rather than an improvement; the flow method beats both.
+   */
+  sources: 'part' | 'feature';
   onIteration?: ((iteration: number, meanError: number) => void) | undefined;
   signal?: AbortSignal | undefined;
 }
@@ -45,6 +62,7 @@ export const DCN_DEFAULTS: DcnParams = {
   cutoff: 5,
   damping: 1,
   smoothing: 2,
+  sources: 'part',
   // 0.25 measured best across the datasets in data/: it removes the fold retries on
   // NUTS 2 entirely and halves the area error there. Higher values fight the force
   // field and fold; 0 leaves boundaries noticeably rougher.
@@ -118,10 +136,25 @@ export function dcn(g: FlatGeometry, values: Float64Array, params: DcnParams): D
   const vi = buildVertexIndex(g);
   const anchor = params.shapeAnchor > 0 ? captureDetail(g, vi) : null;
 
-  const cx = new Float64Array(n);
-  const cy = new Float64Array(n);
-  const radius = new Float64Array(n);
-  const desired = new Float64Array(n);
+  // One force source per *polygon*, not per feature. A multipart feature reduced to a
+  // single centroid pushes from the wrong place: France is thirteen polygons and their
+  // combined centre lies 942 km from mainland France, well inside the radius over which
+  // its force acts. Each part now pushes from itself, while how much it must grow or
+  // shrink still comes from the feature's total area, which is what the value refers to.
+  const perPart = params.sources === 'part';
+  const sourceCount = perPart ? g.polyCount : n;
+  const sourceFeature = new Uint32Array(sourceCount);
+  if (perPart) {
+    for (let f = 0; f < n; f++) {
+      for (let p = g.featStart[f]!; p < g.featStart[f + 1]!; p++) sourceFeature[p] = f;
+    }
+  } else {
+    for (let f = 0; f < n; f++) sourceFeature[f] = f;
+  }
+  const cx = new Float64Array(sourceCount);
+  const cy = new Float64Array(sourceCount);
+  const radius = new Float64Array(sourceCount);
+  const desired = new Float64Array(sourceCount);
   const dx = new Float64Array(vi.count);
   const dy = new Float64Array(vi.count);
   const limit = new Float64Array(vi.count);
@@ -144,12 +177,16 @@ export function dcn(g: FlatGeometry, values: Float64Array, params: DcnParams): D
     iterations = it + 1;
 
     const areas = allFeatureAreas(g);
-    for (let f = 0; f < n; f++) {
-      const [x, y] = featureCentroid(g, f);
-      cx[f] = x;
-      cy[f] = y;
-      radius[f] = Math.sqrt(Math.max(areas[f]!, 0) / Math.PI);
-      desired[f] = Math.sqrt(target[f]! / Math.PI);
+    for (let p = 0; p < sourceCount; p++) {
+      const f = sourceFeature[p]!;
+      const [x, y] = perPart ? polygonCentroid(g, p) : featureCentroid(g, f);
+      const sourceArea = perPart ? polygonArea(g, p) : areas[f]!;
+      // How much the whole feature must change, applied to this source's own radius.
+      const scale = areas[f]! > 0 ? Math.sqrt(target[f]! / areas[f]!) : 1;
+      cx[p] = x;
+      cy[p] = y;
+      radius[p] = Math.sqrt(Math.max(sourceArea, 0) / Math.PI);
+      desired[p] = radius[p]! * scale;
     }
 
     dx.fill(0);

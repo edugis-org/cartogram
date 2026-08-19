@@ -1,5 +1,5 @@
 import type { FlatGeometry } from '../geometry/flat.ts';
-import { allFeatureAreas, featureCentroid } from '../geometry/area.ts';
+import { allFeatureAreas, polygonCentroid } from '../geometry/area.ts';
 
 export interface OlsonParams {
   fit: 'total' | 'max';
@@ -8,11 +8,19 @@ export interface OlsonParams {
 /**
  * Olson (1976), non-contiguous area cartogram.
  *
- * Each feature is scaled about its own area-weighted centroid by
- * sqrt(targetArea / actualArea). Shapes are preserved *exactly* (it is a pure
- * similarity transform per feature: no rounding, no smoothing, no blobbing) and
- * areas come out exact to floating-point precision. What is lost is contiguity:
- * regions shrink away from their neighbours, leaving white space.
+ * Each feature is scaled by sqrt(targetArea / actualArea), where both areas are the
+ * feature's totals. Shapes are preserved *exactly* -- it is a pure similarity
+ * transform: no rounding, no smoothing, no blobbing -- and areas come out exact to
+ * floating-point precision. What is lost is contiguity: regions shrink away from their
+ * neighbours, leaving white space.
+ *
+ * Each *part* of a multipart feature is scaled about its own centroid rather than the
+ * feature's combined one. France is thirteen polygons, and its combined centroid sits
+ * in Europe: scaling Guyane, Réunion and Martinique about that point hurls them across
+ * the map or drags them into the Atlantic, in proportion to how far away they are.
+ * Scaling each island about itself changes its size and leaves it where it belongs,
+ * which is what the reader needs, and the feature's total area is unaffected because
+ * every part takes the same factor.
  *
  * O(V), single pass, no iteration, no parameters to tune. That makes it both a
  * genuinely useful output mode and the correctness oracle for everything else in
@@ -56,16 +64,16 @@ export function olson(g: FlatGeometry, values: Float64Array, params: OlsonParams
     target[f] = target[f]! * global * global;
     if (s === 1) continue;
 
-    const [cx, cy] = featureCentroid(g, f);
-    const p0 = g.featStart[f]!;
-    const p1 = g.featStart[f + 1]!;
-    const vStart = g.ringStart[g.polyStart[p0]!]!;
-    const vEnd = g.ringStart[g.polyStart[p1]!]!;
-    // A feature's polygons, rings and vertices are contiguous in the flat buffers,
-    // so the whole feature is one tight loop over a slice of the coordinate array.
-    for (let v = vStart; v < vEnd; v++) {
-      g.coords[2 * v] = cx + (g.coords[2 * v]! - cx) * s;
-      g.coords[2 * v + 1] = cy + (g.coords[2 * v + 1]! - cy) * s;
+    for (let p = g.featStart[f]!; p < g.featStart[f + 1]!; p++) {
+      const [cx, cy] = polygonCentroid(g, p);
+      // A polygon's rings and vertices are contiguous in the flat buffers, so each part
+      // is one tight loop over a slice of the coordinate array.
+      const vStart = g.ringStart[g.polyStart[p]!]!;
+      const vEnd = g.ringStart[g.polyStart[p + 1]!]!;
+      for (let v = vStart; v < vEnd; v++) {
+        g.coords[2 * v] = cx + (g.coords[2 * v]! - cx) * s;
+        g.coords[2 * v + 1] = cy + (g.coords[2 * v + 1]! - cy) * s;
+      }
     }
   }
 

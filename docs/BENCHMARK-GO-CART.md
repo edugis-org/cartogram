@@ -14,18 +14,28 @@ definition of "area error" is being quoted.
 
 | dataset | implementation | ms | area err | max err | topology | rounding | detail | self-int |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| nl-provinces | ours (grid 256) | 1114 | 0.53% | 4.5% | 0.000 | +0.024 | 1.05 | 0 |
-| nl-provinces | ours (grid 512) | 3420 | 0.48% | 4.1% | 0.000 | +0.024 | 1.05 | 0 |
-| nl-provinces | **go-cart-wasm** | 1962 | **0.03%** | 0.1% | 0.000 | +0.040 | 1.06 | 0 |
-| nuts0 | ours (grid 256) | 2558 | 2.26% | 48.1% | 0.000 | +0.023 | 1.07 | 0 |
-| nuts0 | **ours (grid 512)** | 11270 | **1.02%** | 17.7% | 0.000 | +0.024 | 1.07 | 0 |
-| nuts0 | go-cart-wasm | 23534 | 1.21% | 43.2% | 0.000 | +0.033 | 1.12 | 2 |
-| nuts2-20m | ours (grid 256) | 4047 | 8.67% | 77.3% | 0.000 | +0.064 | 1.17 | 1 |
-| nuts2-20m | **ours (grid 512)** | 15226 | **2.33%** | 73.3% | 0.000 | +0.076 | 1.17 | 1 |
-| nuts2-20m | go-cart-wasm | 2194 | 11.95% | 99.1% | 0.000 | +0.059 | 1.15 | 3 |
-| world-110m | ours (grid 256) | 4174 | 11.81% | 100.0% | 0.000 | +0.058 | 1.27 | 5 |
-| world-110m | **ours (grid 512)** | 18642 | **6.17%** | 100.0% | 0.000 | +0.058 | 1.28 | 22 |
-| world-110m | go-cart-wasm | 35056 | 10.39% | 100.0% | 0.000 | +0.075 | 1.32 | 116 |
+| nl-provinces | ours (grid 256) | 1096 | 0.53% | 4.5% | 0.000 | +0.024 | 1.05 | 0 |
+| nl-provinces | ours (grid 512) | 3398 | 0.48% | 4.1% | 0.000 | +0.024 | 1.05 | 0 |
+| nl-provinces | **go-cart-wasm** | 1995 | **0.03%** | 0.1% | 0.000 | +0.040 | 1.06 | 0 |
+| nuts0 | ours (grid 256) | 2570 | 4.57% | 93.4% | 0.000 | +0.024 | 1.06 | 0 |
+| nuts0 | ours (grid 512) | 11881 | 2.41% | 45.9% | 0.000 | +0.026 | 1.08 | 0 |
+| nuts0 | **go-cart-wasm** | 22751 | **1.21%** | 43.2% | 0.000 | +0.033 | 1.12 | 2 |
+| nuts2-20m | ours (grid 256) | 3277 | 16.54% | 99.1% | 0.000 | +0.047 | 1.14 | 0 |
+| nuts2-20m | **ours (grid 512)** | 14181 | **5.63%** | 99.1% | 0.000 | +0.069 | 1.15 | 1 |
+| nuts2-20m | go-cart-wasm | 2152 | 11.95% | 99.1% | 0.000 | +0.059 | 1.15 | 3 |
+| world-110m | ours (grid 256) | 4569 | 13.16% | 100.0% | 0.000 | +0.060 | 1.26 | 8 |
+| world-110m | **ours (grid 512)** | 19536 | **6.08%** | 100.0% | 0.000 | +0.060 | 1.28 | 17 |
+| world-110m | go-cart-wasm | 34662 | 10.39% | 100.0% | 0.000 | +0.075 | 1.32 | 116 |
+
+**These numbers are worse than an earlier revision reported on NUTS 2 (5.63% against
+2.33%) and that is deliberate.** The earlier figure was bought by inflating every region
+smaller than a grid cell up to a full one, which grew the total land area sixfold and
+compressed the ocean around it, dragging French Guiana thousands of kilometres towards
+Europe. The area error did not notice, because it is computed from normalized shares.
+Sub-cell regions are now mass-neutral, so the map keeps its shape and its geography at
+the cost of a number that was partly fictitious. Position drift is the metric that
+changed for the better: the median region on NUTS 3 moved 1342 km before and 205 km now,
+against 200 km for the reference implementation.
 
 Measured after the adaptive integrator, exact-area density, and progressive grid
 refinement. For reference, the figures at grid 512 before that work were 0.20 / 5.51 /

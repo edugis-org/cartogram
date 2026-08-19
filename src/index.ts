@@ -8,7 +8,7 @@ import type {
 } from './types.ts';
 import { pack, unpack, cloneCoords, vertexCount } from './geometry/flat.ts';
 import { densify, autoSpacing } from './topology/densify.ts';
-import { allFeatureAreas, bbox, scaleAbout } from './geometry/area.ts';
+import { allFeatureAreas, centreOfMass, similarity } from './geometry/area.ts';
 import { partition } from './io/validate.ts';
 import { extractValues } from './io/values.ts';
 import { chooseProjection, projectInPlace, unprojectInPlace } from './io/project.ts';
@@ -24,7 +24,10 @@ import { selfIntersections } from './metrics/validity.ts';
 
 export * from './types.ts';
 export { pack, unpack } from './geometry/flat.ts';
-export { featureArea, featureCentroid, allFeatureAreas, bbox, scaleAbout } from './geometry/area.ts';
+export {
+  featureArea, featureCentroid, allFeatureAreas, bbox, scaleAbout, similarity, centreOfMass,
+  polygonArea, polygonCentroid,
+} from './geometry/area.ts';
 export { cartographicError } from './metrics/area.ts';
 export { topologyError, adjacency } from './metrics/topology.ts';
 export { shapePreservation, compactness, featurePerimeter } from './metrics/shape.ts';
@@ -114,6 +117,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         damping: options.damping ?? DCN_DEFAULTS.damping,
         shapeAnchor: options.shapeAnchor ?? DCN_DEFAULTS.shapeAnchor,
         smoothing: options.smoothing ?? DCN_DEFAULTS.smoothing,
+        sources: options.sources ?? DCN_DEFAULTS.sources,
         onIteration: options.onIteration,
         signal: options.signal,
       });
@@ -133,6 +137,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         targetError: options.targetError ?? FLOW_DEFAULTS.targetError,
         stepsPerRun: options.stepsPerRun ?? FLOW_DEFAULTS.stepsPerRun,
         tolerance: options.tolerance ?? FLOW_DEFAULTS.tolerance,
+        floorCells: options.floorCells ?? FLOW_DEFAULTS.floorCells,
         gradient: options.gradient ?? FLOW_DEFAULTS.gradient,
         runs: options.runs ?? FLOW_DEFAULTS.runs,
         blur: options.blur ?? FLOW_DEFAULTS.blur,
@@ -193,18 +198,27 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   }
   const runtimeMs = now() - t0;
 
-  // Pin the overall size. A cartogram determines relative areas; the absolute scale is
-  // free, and the warp methods drift away from the input's total area (measured on
-  // NUTS 2: 1.50x for the flow method, 0.88x for the force method). Normalized area
-  // error cannot see that, but a reader comparing the result against the original map
-  // certainly can.
+  // Pin the map's size *and* its position. A cartogram determines relative areas;
+  // absolute scale and position are both free, and a warp of the plane drifts in both.
+  // Normalized area error cannot see either, but a reader comparing the result with the
+  // original certainly can: before this, on NUTS 3, the median region ended up 1342 km
+  // from where it started and French Guiana 2904 km, against 200 km and 48 km for the
+  // reference implementation.
+  //
+  // Scale comes from total area. Position comes from the area-weighted centre of mass,
+  // matched to the input's: anchoring on the bounding box instead lets a handful of
+  // remote territories -- the Azores, Réunion, French Guiana -- decide where the whole
+  // map sits, and an earlier version that scaled about the output's bounding-box centre
+  // made the drift worse rather than better.
   const rescales = options.method === 'flow' || options.method === 'dcn';
-  if (rescales && (options.preserveTotalArea ?? true)) {
+  if (rescales && (options.preserveTotalArea ?? true) && before) {
     const inputTotal = inputAreas.reduce((a, b) => a + b, 0);
     const outputTotal = allFeatureAreas(packed).reduce((a, b) => a + b, 0);
     if (inputTotal > 0 && outputTotal > 0) {
-      const [minX, minY, maxX, maxY] = bbox(packed);
-      scaleAbout(packed, (minX + maxX) / 2, (minY + maxY) / 2, Math.sqrt(inputTotal / outputTotal));
+      const factor = Math.sqrt(inputTotal / outputTotal);
+      const [ix, iy] = centreOfMass(before, inputAreas);
+      const [ox, oy] = centreOfMass(packed, inputAreas);
+      similarity(packed, factor, ix - ox * factor, iy - oy * factor);
     }
   }
 

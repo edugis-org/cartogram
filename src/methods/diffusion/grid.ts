@@ -74,6 +74,13 @@ export function buildDensityGrid(
   // field, so nothing is allowed to reach it.
   const densityFloor = meanDensity * 1e-6;
 
+  // How many cells each feature ended up with, after the guarantee above.
+  const cellCount = new Float64Array(g.featCount);
+  for (let i = 0; i < owner.length; i++) {
+    const f = owner[i]!;
+    if (f >= 0) cellCount[f]!++;
+  }
+
   const rho = new Float64Array(size * size);
   let sea = 0;
   for (let i = 0; i < owner.length; i++) {
@@ -82,14 +89,36 @@ export function buildDensityGrid(
       rho[i] = meanDensity;
       sea++;
     } else {
-      // Density from the region's *exact* polygon area, not from the area of the
-      // cells it happens to cover. The flow equalizes the field it is given, so a
-      // rasterized area that is off by a fraction of a boundary cell leaves the real
-      // polygon area off by the same fraction: measured, that pinned the Dutch
-      // provinces at 0.15% area error no matter how finely the flow was integrated.
-      // Using the true area makes the raster a vehicle for the field rather than the
-      // definition of the target.
-      const d = areas[f]! > 0 ? values[f]! / areas[f]! : meanDensity;
+      // Density from the region's *exact* polygon area rather than the area of the
+      // cells it happens to cover: the flow equalizes the field it is given, so a
+      // rasterized area off by a fraction of a boundary cell leaves the real polygon
+      // area off by the same fraction.
+      //
+      // A region smaller than a cell still occupies a whole cell, so this needs care in
+      // both directions. Spreading `value / exactArea` over that cell puts far more
+      // mass on the grid than the region has, by the ratio of cell to region: with 924
+      // of the 1333 NUTS 3 regions under a cell that inflated the land sixfold and
+      // compressed the surrounding ocean, dragging French Guiana thousands of
+      // kilometres towards Europe. Spreading `value / cellArea` instead drains it, and
+      // because the region is re-rasterized into a cell again every pass, the shortfall
+      // compounds: the land collapsed to a fiftieth of its size.
+      //
+      // The stable treatment is to let an unresolvable region be *neutral*. It is
+      // given at least the density of the sea it displaces, so it neither inflates nor
+      // drains the field and simply rides along; a dense one (Paris in a single cell)
+      // still exceeds that and still expands. What it cannot do is be drawn smaller
+      // than the grid can represent, which is honest: that is a resolution limit, and
+      // the under-resolved count is reported so it can be fixed with a finer grid.
+      // The neutral treatment is only for regions genuinely smaller than a cell. Keying
+      // it on "the raster came out bigger than the polygon" instead catches any region
+      // whose boundary cells happen to round up -- which is most of them -- and clamps
+      // ordinary sparse provinces up to mean density: on the Dutch provinces that alone
+      // took the area error from 0.5% to 3.5%.
+      const occupied = cellCount[f]! * cell * cell;
+      const d =
+        areas[f]! < cell * cell
+          ? Math.max(values[f]! / Math.max(occupied, areas[f]!), meanDensity)
+          : values[f]! / areas[f]!;
       rho[i] = Math.max(d, densityFloor);
     }
   }

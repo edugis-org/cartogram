@@ -101,6 +101,15 @@ export interface DcnOptions extends CommonOptions {
    */
   smoothing?: number;
   /**
+   * Where each region's force acts from: `part` (default) gives every polygon of a
+   * multipart feature its own source, scaled by what the whole feature needs; `feature`
+   * uses one source at the combined centroid. France is thirteen polygons whose
+   * combined centre lies 942 km from mainland France, well inside the radius its force
+   * acts over. On world countries `part` takes the area error from 28.7% to 16.6% and
+   * the self-intersections from 342 to 2198 — a genuine trade, not a free improvement.
+   */
+  sources?: 'part' | 'feature';
+  /**
    * Anti-blob strength, 0..1. Default 0.25. The force field is smooth and slowly
    * erases boundary detail, which is what rounds regions into circles; this puts the
    * detail back at the region's new scale. 0 reproduces textbook DCN, blobbing and all.
@@ -151,6 +160,13 @@ export interface FlowOptions extends CommonOptions {
   padding?: number;
   /** Stop once the mean cartographic error reaches this. Default 0.01. */
   targetError?: number;
+  /**
+   * Minimum target area for a region, as a fraction of a grid cell. Default 0.05. Only
+   * there to stop a region collapsing to numerical nothing; at a full cell it raises
+   * every below-average region up to mean density, inflating the land and squeezing
+   * the ocean.
+   */
+  floorCells?: number;
   /** Cap on integration steps within one pass. Default 200. */
   stepsPerRun?: number;
   /**

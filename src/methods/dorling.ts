@@ -1,5 +1,5 @@
 import type { FlatGeometry } from '../geometry/flat.ts';
-import { allFeatureAreas, featureCentroid } from '../geometry/area.ts';
+import { allFeatureAreas, featureCentroid, polygonArea, polygonCentroid } from '../geometry/area.ts';
 import { adjacency } from '../metrics/topology.ts';
 
 export interface DorlingParams {
@@ -103,7 +103,21 @@ export function dorling(
   const homeY = new Float64Array(n);
 
   for (let f = 0; f < n; f++) {
-    const [cx, cy] = featureCentroid(g, f);
+    // Anchor the symbol on the feature's largest part, not on the centroid of all of
+    // them. France is thirteen polygons scattered from the Caribbean to the Indian
+    // Ocean, and their combined centroid lies 269 km from mainland France -- so the
+    // circle representing France would be drawn out at sea. A reader looks for the
+    // symbol where the country is, which means where most of it is.
+    let largest = g.featStart[f]!;
+    let largestArea = -1;
+    for (let p = g.featStart[f]!; p < g.featStart[f + 1]!; p++) {
+      const a = polygonArea(g, p);
+      if (a > largestArea) {
+        largestArea = a;
+        largest = p;
+      }
+    }
+    const [cx, cy] = largestArea > 0 ? polygonCentroid(g, largest) : featureCentroid(g, f);
     x[f] = cx;
     y[f] = cy;
     homeX[f] = cx;

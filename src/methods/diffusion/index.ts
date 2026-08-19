@@ -10,6 +10,15 @@ export interface FlowParams {
   padding: number;
   /** Stop when the mean cartographic error reaches this. Default 0.01. */
   targetError: number;
+  /**
+   * Minimum target area for a region, as a fraction of a grid cell. Default 0.05.
+   *
+   * Exists only to stop a region collapsing to numerical nothing over successive
+   * passes. It must be *small*: at a full cell it does not merely protect the tiny
+   * regions, it raises every region sparser than average up to mean density, which
+   * inflates the total land area and squeezes the surrounding ocean.
+   */
+  floorCells: number;
   /** Cap on integration steps within one pass. Default 200. */
   stepsPerRun: number;
   /**
@@ -51,6 +60,7 @@ export const FLOW_DEFAULTS: FlowParams = {
   targetError: 0.01,
   stepsPerRun: 200,
   tolerance: 0.02,
+  floorCells: 0.05,
   gradient: 'differences',
   runs: 10,
   blur: 4,
@@ -152,7 +162,7 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   const effective = new Float64Array(n);
   let effectiveSum = 0;
   for (let f = 0; f < n; f++) {
-    const floorArea = Math.min(cellArea, areas0[f]!);
+    const floorArea = Math.min(cellArea * params.floorCells, areas0[f]!);
     const floorValue = areaSum > 0 ? (valueSum * floorArea) / areaSum : 0;
     effective[f] = Math.max(values[f]!, floorValue);
     effectiveSum += effective[f]!;

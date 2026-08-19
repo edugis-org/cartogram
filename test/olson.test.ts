@@ -164,3 +164,56 @@ describe('M1 exit criterion: exact areas on every dataset', () => {
     expect(out.warnings.length).toBeGreaterThan(0);
   });
 });
+
+describe('multipart features', () => {
+  it('scales each part about its own centre, not the feature\'s combined one', () => {
+    // France is thirteen polygons from the Caribbean to the Indian Ocean, and their
+    // combined centroid sits 942 km from mainland France. Scaling every part about
+    // that point hurls the distant islands across the map in proportion to how far
+    // away they are; scaling each about itself changes its size and leaves it put.
+    const mainland = squareFeature('mainland', 0, 0, 10, 4) as never;
+    const island = {
+      type: 'Feature',
+      id: 'country',
+      properties: { value: 4 },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+          [[[500, 500], [502, 500], [502, 502], [500, 502], [500, 500]]],
+        ],
+      },
+    };
+    const out = cartogram(fc([island, squareFeature('other', 20, 0, 10, 1)]), {
+      method: 'olson', value: 'value', projection: 'none',
+    } as never);
+
+    const parts = (out.featureCollection.features[0]!.geometry as { coordinates: number[][][][] }).coordinates;
+    // The remote island's centre must stay where it was, near (501, 501).
+    const remote = parts[1]![0]!;
+    const cx = remote.slice(0, 4).reduce((s, p) => s + p[0]!, 0) / 4;
+    const cy = remote.slice(0, 4).reduce((s, p) => s + p[1]!, 0) / 4;
+    expect(cx).toBeCloseTo(501, 6);
+    expect(cy).toBeCloseTo(501, 6);
+    void mainland;
+  });
+
+  it('still gets the feature total exactly right', () => {
+    const island = {
+      type: 'Feature',
+      properties: { value: 3 },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [
+          [[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]],
+          [[[100, 100], [102, 100], [102, 102], [100, 102], [100, 100]]],
+        ],
+      },
+    };
+    const out = cartogram(fc([island, squareFeature('other', 10, 0, 4, 1)]), {
+      method: 'olson', value: 'value', projection: 'none',
+    } as never);
+    expect(out.metrics.areaError.max).toBeLessThan(1e-9);
+    expect(out.diagnostics[0]!.outputArea / out.diagnostics[1]!.outputArea).toBeCloseTo(3, 9);
+  });
+});
