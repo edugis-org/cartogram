@@ -10,8 +10,17 @@ export interface FlowParams {
   padding: number;
   /** Stop when the mean cartographic error reaches this. Default 0.01. */
   targetError: number;
-  /** Integration steps within one pass. Default 60. */
+  /** Cap on integration steps within one pass. Default 200. */
   stepsPerRun: number;
+  /**
+   * Local error tolerance for the adaptive step, in grid cells. Default 0.02.
+   *
+   * The integrator estimates how far a step is wrong by comparing its second-order
+   * result against the first-order one it contains, and shrinks or grows the step to
+   * hold that estimate near this value. Tighter costs steps; each step is a full
+   * inverse cosine transform, which is the dominant expense of the method.
+   */
+  tolerance: number;
   /** Passes over the whole flow, each with half the blur of the last. Default 10. */
   runs: number;
   /** Blur of the first pass, in cells; halves each pass. Default 4. */
@@ -24,7 +33,8 @@ export const FLOW_DEFAULTS: FlowParams = {
   grid: 512,
   padding: 1.5,
   targetError: 0.01,
-  stepsPerRun: 60,
+  stepsPerRun: 200,
+  tolerance: 0.02,
   runs: 10,
   blur: 4,
 };
@@ -135,17 +145,22 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   }
 
   const rho = new Float64Array(size * size);
-  const vx = new Float64Array(size * size);
-  const vy = new Float64Array(size * size);
+  // Two velocity fields: the one at the current time, and the one at the end of the
+  // trial step. Heun needs both, and after an accepted step the second becomes the
+  // first, so a step costs exactly one new field evaluation.
+  const vxA = new Float64Array(size * size);
+  const vyA = new Float64Array(size * size);
+  const vxB = new Float64Array(size * size);
+  const vyB = new Float64Array(size * size);
   const scratch = new Float64Array(size * size);
   const vertexCount = g.coords.length >>> 1;
   const px = new Float64Array(vertexCount);
   const py = new Float64Array(vertexCount);
+  const trialX = new Float64Array(vertexCount);
+  const trialY = new Float64Array(vertexCount);
 
   const tRelax = (size / Math.PI) * (size / Math.PI);
-  const tMin = 0.05;
   const tMax = 8 * tRelax;
-  const ratio = Math.pow(tMax / tMin, 1 / params.stepsPerRun);
 
   let meanError = errorOf(allFeatureAreas(g), target);
   let converged = meanError <= params.targetError;
@@ -155,16 +170,6 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   let underResolved = 0;
   let lastTime = 0;
 
-  // Outer loop over a decreasing blur, each pass re-rasterizing the *current* map.
-  //
-  // A single pass cannot get there: the density field is built from the map as it is
-  // now, so once the map has moved the field it was built from is stale. Re-deriving
-  // it and flowing again is what actually converges -- and running the early passes
-  // with a wide blur is what keeps them stable. Without the blur schedule the field
-  // has near-singular gradients at region boundaries (a 500:1 density jump across one
-  // cell in the synthetic grid), the integrator throws vertices across the map, and
-  // the result swings wildly with grid size: 72% area error at 256 cells against 5% at
-  // 512, which is the signature of an under-resolved field rather than of tuning.
   for (let run = 0; run < params.runs && !converged; run++) {
     if (params.signal?.aborted) break;
 
@@ -174,7 +179,6 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
     const coeff = Float64Array.from(grid.rho);
     dct2Forward(coeff, size, size, dct, dct);
 
-    // Blur halves each pass, down to nothing.
     const blur = params.blur * Math.pow(0.5, run);
     if (blur > 0.05) {
       const sigmaT = (blur * blur) / 2;
@@ -188,37 +192,65 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
       py[v] = (g.coords[2 * v + 1]! - grid.y0) / grid.h;
     }
 
-    // Steps are geometric in time: the early sharp flow is finely resolved and the
-    // long uniform tail costs few steps. A fixed fraction of t was tried first and is
-    // far too coarse, leaving a third of the area error behind.
-    let t = tMin;
-    for (let step = 0; step < params.stepsPerRun; step++) {
-      const dt = t * (ratio - 1);
-      // One field evaluation per step, at the interval midpoint: second order in time
-      // without a second transform.
-      fieldAt(coeff, rho, size, dct, k2, t + dt / 2, scratch);
-      velocity(rho, vx, vy, size);
+    // Adaptive Heun (the explicit trapezoid) with the Euler result it contains used as
+    // the error estimate -- the classic embedded pair. Their difference is the local
+    // error, and the step is scaled to hold it near `tolerance`.
+    //
+    // This replaces a fixed geometric schedule, which had to be conservative
+    // everywhere to survive the violent early flow, and so wasted most of its steps on
+    // the long uniform tail where nothing moves. Since every step costs an inverse
+    // cosine transform, spending them where the flow actually varies is the whole game.
+    let t = 0;
+    let h = 0.05;
+    fieldAt(coeff, rho, size, dct, k2, t, scratch);
+    velocity(rho, vxA, vyA, size);
 
-      let maxMove = 0;
-      for (let v = 0; v < vertexCount; v++) {
-        const [ux, uy] = sample(vx, vy, size, px[v]!, py[v]!);
-        const midX = px[v]! + ux * dt;
-        const midY = py[v]! + uy * dt;
-        const [wx, wy] = sample(vx, vy, size, midX, midY);
-        const mx = ((ux + wx) / 2) * dt;
-        const my = ((uy + wy) / 2) * dt;
-        px[v]! += mx;
-        py[v]! += my;
-        const move = Math.abs(mx) + Math.abs(my);
-        if (move > maxMove) maxMove = move;
-      }
-      t += dt;
+    let stepsThisRun = 0;
+    while (t < tMax && stepsThisRun < params.stepsPerRun) {
+      if (params.signal?.aborted) break;
+
+      fieldAt(coeff, rho, size, dct, k2, t + h, scratch);
+      velocity(rho, vxB, vyB, size);
       steps++;
-      // Once the field is flat the remaining steps move nothing, and each one costs a
-      // full inverse cosine transform -- the dominant expense of the whole method
-      // (14 s of a 17 s run at grid 512). A thousandth of a cell is far below anything
-      // visible.
-      if (maxMove < 1e-3) break;
+      stepsThisRun++;
+
+      let worst = 0;
+      let moved = 0;
+      for (let v = 0; v < vertexCount; v++) {
+        const [ux, uy] = sample(vxA, vyA, size, px[v]!, py[v]!);
+        const ex = px[v]! + ux * h;
+        const ey = py[v]! + uy * h;
+        const [wx, wy] = sample(vxB, vyB, size, ex, ey);
+        const hx = px[v]! + ((ux + wx) / 2) * h;
+        const hy = py[v]! + ((uy + wy) / 2) * h;
+        trialX[v] = hx;
+        trialY[v] = hy;
+        // Heun minus Euler: the second-order correction, which is the local error.
+        const err = Math.abs(hx - ex) + Math.abs(hy - ey);
+        if (err > worst) worst = err;
+        const move = Math.abs(hx - px[v]!) + Math.abs(hy - py[v]!);
+        if (move > moved) moved = move;
+      }
+
+      if (worst > params.tolerance && h > 1e-6) {
+        // Reject and retry smaller. The field at t is still valid, so only the trial
+        // field is recomputed.
+        h *= Math.max(0.2, 0.9 * Math.sqrt(params.tolerance / worst));
+        continue;
+      }
+
+      px.set(trialX);
+      py.set(trialY);
+      t += h;
+      vxA.set(vxB);
+      vyA.set(vyB);
+
+      // Grow towards the tolerance, but never by more than a factor of four at once.
+      const growth = worst > 0 ? 0.9 * Math.sqrt(params.tolerance / worst) : 4;
+      h *= Math.min(4, Math.max(1, growth));
+
+      // Once nothing moves, the remaining time carries no information.
+      if (moved < 1e-3) break;
     }
     lastTime = t;
 
@@ -228,12 +260,6 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
     params.onIteration?.(run + 1, meanError);
     if (meanError <= params.targetError) converged = true;
 
-    // Stop when passes stop paying for themselves. Some maps plateau well above the
-    // target -- small regions are limited by how many grid cells they cover, not by
-    // how long the flow runs -- and grinding out the remaining passes only costs time.
-    // The threshold has to be strict. At 2% improvement per pass this cut the Dutch
-    // provinces off at 1.02% error when two more passes would have reached 0.60%:
-    // passes that look marginal individually still compound.
     if (previous > 0 && meanError > previous * 0.999) {
       stalled++;
       if (stalled >= 3) break;

@@ -14,35 +14,42 @@ definition of "area error" is being quoted.
 
 | dataset | implementation | ms | area err | max err | topology | rounding | detail | self-int |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| nl-provinces | ours (grid 256) | 1347 | 1.00% | 6.4% | 0.000 | +0.041 | 1.06 | 0 |
-| nl-provinces | ours (grid 512) | 5422 | 0.20% | 1.3% | 0.000 | +0.041 | 1.07 | 0 |
-| nl-provinces | **go-cart-wasm** | 2053 | **0.03%** | 0.1% | 0.000 | +0.040 | 1.06 | 0 |
-| nuts0 | ours (grid 256) | 4675 | 10.41% | 93.6% | 0.000 | +0.030 | 1.07 | 0 |
-| nuts0 | ours (grid 512) | 19638 | 5.51% | 41.3% | 0.000 | +0.028 | 1.08 | 0 |
-| nuts0 | **go-cart-wasm** | 23056 | **1.21%** | 43.2% | 0.000 | +0.033 | 1.12 | 2 |
-| nuts2-20m | ours (grid 256) | 5148 | 22.14% | 99.1% | 0.000 | +0.044 | 1.15 | 0 |
-| nuts2-20m | **ours (grid 512)** | 21293 | **9.11%** | 99.1% | 0.000 | +0.073 | 1.15 | 0 |
-| nuts2-20m | go-cart-wasm | 2089 | 11.95% | 99.1% | 0.000 | +0.059 | 1.15 | 3 |
-| world-110m | ours (grid 256) | 5199 | 17.28% | 100.0% | 0.000 | +0.064 | 1.26 | 5 |
-| world-110m | **ours (grid 512)** | 22888 | **8.01%** | 100.0% | 0.000 | +0.063 | 1.27 | 12 |
-| world-110m | go-cart-wasm | 35040 | 10.39% | 100.0% | 0.000 | +0.075 | 1.32 | 116 |
+| nl-provinces | ours (grid 256) | 1337 | 0.75% | 6.0% | 0.000 | +0.041 | 1.06 | 0 |
+| nl-provinces | ours (grid 512) | 7012 | 0.20% | 1.7% | 0.000 | +0.041 | 1.07 | 0 |
+| nl-provinces | **go-cart-wasm** | 2010 | **0.03%** | 0.1% | 0.000 | +0.040 | 1.06 | 0 |
+| nuts0 | ours (grid 256) | 2829 | 4.43% | 90.4% | 0.000 | +0.028 | 1.08 | 0 |
+| nuts0 | ours (grid 512) | 14082 | 2.44% | 65.3% | 0.000 | +0.027 | 1.08 | 0 |
+| nuts0 | **go-cart-wasm** | 23477 | **1.21%** | 43.2% | 0.000 | +0.033 | 1.12 | 2 |
+| nuts2-20m | ours (grid 256) | 4620 | 11.10% | 93.1% | 0.000 | +0.059 | 1.18 | 1 |
+| nuts2-20m | **ours (grid 512)** | 17750 | **3.04%** | 76.6% | 0.000 | +0.069 | 1.16 | 1 |
+| nuts2-20m | go-cart-wasm | 2204 | 11.95% | 99.1% | 0.000 | +0.059 | 1.15 | 3 |
+| world-110m | ours (grid 256) | 5020 | 14.01% | 100.0% | 0.000 | +0.059 | 1.26 | 5 |
+| world-110m | **ours (grid 512)** | 25017 | **5.76%** | 100.0% | 0.000 | +0.062 | 1.27 | 18 |
+| world-110m | go-cart-wasm | 35324 | 10.39% | 100.0% | 0.000 | +0.075 | 1.32 | 116 |
+
+Measured after implementing the adaptive integrator and taking region density from exact
+polygon areas. The earlier figures, for reference, were 0.20 / 5.51 / 9.11 / 8.01 percent
+for the four datasets at grid 512.
 
 ## What it says
 
-**Their integrator is worth a lot on well-behaved maps.** On the Dutch provinces they
-reach 0.03% area error where we reach 0.20% at grid 512 — seven times better, in
-half the time. On NUTS 0 they reach 1.21% against our 5.51%. This is the cost of
-replacing the paper's adaptive Runge–Kutta with a midpoint rule on a fixed geometric
-schedule, and it is the single clearest thing to improve in this library.
+**They remain ahead on well-behaved maps.** On the Dutch provinces they reach 0.03%
+area error against our 0.20%, and on NUTS 0 1.21% against our 2.44%. Our figure on the
+provinces will not improve with more integration: tightening the step tolerance from
+0.02 to 0.002 cells, the error target from 1% to 0.02%, and raising the pass count all
+leave it at 0.15–0.20%. Something other than the integrator sets that floor, and the
+likeliest candidate is the velocity field, which we obtain by central differences on the
+diffused grid and sample bilinearly, where go_cart takes it analytically from sine and
+cosine transforms of the gradient. That is the next thing to try.
 
-**On hard maps the gap closes and reverses.** NUTS 2: 9.11% for us against 11.95% for
-them. World countries: 8.01% against 10.39%. These are the datasets where many regions
-are small relative to the grid, and where the guaranteed-one-cell allocation and the
-value floor added here are doing real work.
+**On hard maps we are now well ahead.** NUTS 2: 3.04% for us against 11.95% for them.
+World countries: 5.76% against 10.39%. These are the maps full of regions smaller than a
+grid cell, where the guaranteed-one-cell allocation, the value floor, and taking density
+from exact polygon areas are all doing real work.
 
 **Runtime is not a straight win for either.** They are faster on the provinces (2.0 s
-against 5.4 s) and dramatically faster on NUTS 2 (2.1 s against 21.3 s), but slower on
-NUTS 0 (23.1 s against 19.6 s) and on the world map (35.0 s against 22.9 s). Their cost
+against 7.0 s) and dramatically faster on NUTS 2 (2.2 s against 17.8 s), but slower on
+NUTS 0 (23.5 s against 14.1 s) and on the world map (35.3 s against 25.0 s). Their cost
 clearly adapts to the data; ours is fixed by the grid the caller chooses. Comparing at
 equal grid resolution is not possible — go-cart-wasm does not expose one.
 
@@ -52,8 +59,8 @@ detail retention within 0.06. Two independent implementations of the same physic
 producing the same shape behaviour is good evidence that neither is doing anything
 strange.
 
-**Self-intersections favour us**: 0 where they emit 2 and 3, and 12 against their 116 on
-the world map. Not a claim about correctness — some of those are inherited from the
+**Self-intersections favour us**: 0 or 1 where they emit 2 and 3, and 18 against their
+116 on the world map. Not a claim about correctness — some of those are inherited from the
 input — but our output is cleaner.
 
 ## The comparison is at equal grid resolution
@@ -117,5 +124,7 @@ well-behaved data. What this library offers instead is one API across five metho
 WASM and no runtime dependencies, an explicit quality/runtime dial, projection and
 value handling built in, and the metric suite used to produce this very table.
 
-The gap on the provinces and NUTS 0 is a fair measure of what the adaptive integrator
-buys. Implementing it is the top of the list.
+The adaptive integrator has since been implemented. It helped, and it also showed that
+it was not the whole story: the remaining gap on well-behaved maps survives any amount of
+extra integration, so the next suspect is the finite-difference velocity field rather than
+the stepping.

@@ -137,8 +137,14 @@ export interface FlowOptions extends CommonOptions {
   padding?: number;
   /** Stop once the mean cartographic error reaches this. Default 0.01. */
   targetError?: number;
-  /** Integration steps within one pass. Default 60. */
+  /** Cap on integration steps within one pass. Default 200. */
   stepsPerRun?: number;
+  /**
+   * Local error tolerance of the adaptive step, in grid cells. Default 0.02. Tighter
+   * is more accurate and costs more steps, each of which is an inverse cosine
+   * transform — the dominant expense of this method.
+   */
+  tolerance?: number;
   /** Passes over the whole flow, each re-rasterizing the current map. Default 10. */
   runs?: number;
   /** Blur of the first pass, in cells; halves each pass. Default 4. */

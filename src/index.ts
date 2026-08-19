@@ -132,6 +132,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         padding: options.padding ?? FLOW_DEFAULTS.padding,
         targetError: options.targetError ?? FLOW_DEFAULTS.targetError,
         stepsPerRun: options.stepsPerRun ?? FLOW_DEFAULTS.stepsPerRun,
+        tolerance: options.tolerance ?? FLOW_DEFAULTS.tolerance,
         runs: options.runs ?? FLOW_DEFAULTS.runs,
         blur: options.blur ?? FLOW_DEFAULTS.blur,
         onIteration: options.onIteration,

@@ -68,14 +68,6 @@ export function buildDensityGrid(
   }
   const meanDensity = areaSum > 0 ? valueSum / areaSum : 1;
 
-  // Per-feature target density. Using the *rasterized* cell count rather than the
-  // exact polygon area matters: the flow equalizes the field it is actually given, so
-  // any mismatch between the two shows up directly as area error.
-  const cellCount = new Float64Array(g.featCount);
-  for (let i = 0; i < owner.length; i++) {
-    const f = owner[i]!;
-    if (f >= 0) cellCount[f]!++;
-  }
 
   // Safety net only: callers are expected to have floored their values already (the
   // flow driver does), but a zero density here would divide by zero in the velocity
@@ -90,8 +82,14 @@ export function buildDensityGrid(
       rho[i] = meanDensity;
       sea++;
     } else {
-      const cells = cellCount[f]!;
-      const d = cells > 0 ? values[f]! / (cells * cell * cell) : meanDensity;
+      // Density from the region's *exact* polygon area, not from the area of the
+      // cells it happens to cover. The flow equalizes the field it is given, so a
+      // rasterized area that is off by a fraction of a boundary cell leaves the real
+      // polygon area off by the same fraction: measured, that pinned the Dutch
+      // provinces at 0.15% area error no matter how finely the flow was integrated.
+      // Using the true area makes the raster a vehicle for the field rather than the
+      // definition of the target.
+      const d = areas[f]! > 0 ? values[f]! / areas[f]! : meanDensity;
       rho[i] = Math.max(d, densityFloor);
     }
   }

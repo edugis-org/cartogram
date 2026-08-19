@@ -112,11 +112,10 @@ npm run bench:go-cart  # head-to-head against the reference C implementation
 ```
 
 The flow method is benchmarked against [`go-cart-wasm`](https://github.com/riatelab/go-cart-wasm),
-the authors' own C implementation of the same algorithm. Summary: they are markedly more
-accurate on well-behaved maps (0.03% against our 0.20% on the Dutch provinces, which is
-what their adaptive integrator buys), we are more accurate on the harder ones (9.1%
-against 11.9% on NUTS 2, 8.0% against 10.4% on world countries), and shape and topology
-behaviour agree closely. Full table and caveats in
+the authors' own C implementation of the same algorithm. Summary: they are more accurate on
+well-behaved maps (0.03% against our 0.20% on the Dutch provinces), we are substantially
+more accurate on the harder ones (3.0% against 11.9% on NUTS 2, 5.8% against 10.4% on
+world countries), and shape and topology behaviour agree closely. Full table and caveats in
 [`docs/BENCHMARK-GO-CART.md`](docs/BENCHMARK-GO-CART.md).
 
 Scaling is near-linear as required: Olson is linear in vertices (512× vertices, 375×
