@@ -454,7 +454,11 @@ function fillAttributes(): void {
       return o;
     }),
   );
-  if (spec.hasMissing && els.missing.value === 'error') els.missing.value = 'zero';
+  // 'drop' rather than 'zero' for datasets with gaps. A value of zero is not missing
+  // data, it is data claiming the region has nothing: the region then has a target
+  // share of zero, scores 100% area error whatever it does, and drifts around the map
+  // being pushed by its neighbours. Dropping it says plainly that it is unknown.
+  if (spec.hasMissing && els.missing.value === 'error') els.missing.value = 'drop';
 }
 
 els.dataset.addEventListener('change', () => {

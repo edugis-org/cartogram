@@ -21,12 +21,18 @@
           <label>Missing values
             <select id="missing">
               <option value="error">error</option>
-              <option value="zero" selected>zero</option>
+              <option value="zero">zero</option>
               <option value="mean">mean</option>
-              <option value="drop">drop</option>
+              <option value="drop" selected>drop</option>
             </select>
           </label>
           <p id="dataset-note" class="note"></p>
+          <p class="note">
+            A missing value is not a zero. Under <em>zero</em> a region claims to have
+            nothing, so it scores 100% area error whatever it does and is shoved around
+            by its neighbours; that is why <em>max area error</em> reads 100% on any
+            dataset with gaps. <em>drop</em> removes it and says so.
+          </p>
         </section>
 
         <section>

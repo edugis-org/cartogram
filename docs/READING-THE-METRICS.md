@@ -37,6 +37,21 @@ differences rather than exaggerating them — which is why the survey recommends
   holes wherever a boundary crosses itself. Some are inherited from the input.
 - **topology error** — anything above 0 on a contiguous method means the map has torn.
 
+## A max of exactly 100% usually means missing data
+
+If the maximum area error sits at 100% on a dataset with gaps, look at the
+missing-value policy before looking at the algorithm. Under `missing: 'zero'` a region
+with no data is told its target share is zero. It cannot then be anything other than
+100% wrong, whatever size it comes out — the error is `|achieved − 0| / achieved = 1` by
+definition — and it still occupies space, so it drifts about being pushed by its
+neighbours.
+
+On NUTS 3, 181 of the 1514 regions have no Eurostat population (the United Kingdom),
+and every one of them reports exactly 100%. The mean error is 35.3% under `zero` and
+27.1% under `drop`, and the no-data regions occupy 3.2% of the map under `zero` and none
+at all under `drop`. `drop` is the honest policy for genuinely unknown values; `zero`
+belongs to values that really are zero.
+
 ## What this means for tuning
 
 Two hours were spent taking the flow method from 0.198% to 0.174% mean area error on the

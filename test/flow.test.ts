@@ -172,3 +172,23 @@ describe('degenerate values do not destroy the map', () => {
     expect(r.diagnostics[0]!.outputArea / r.diagnostics[0]!.inputArea).toBeGreaterThan(1e-4);
   });
 });
+
+describe('the value floor cannot inflate a region', () => {
+  it('a worthless region never grows past its own size because of flooring', () => {
+    // Regression. The floor exists so a region smaller than a grid cell does not
+    // compound away to nothing over successive passes, but flooring it *at* one cell
+    // inflated anything smaller than a cell up to a full one. On NUTS 3 at grid 256
+    // that took Tower Hamlets from 12 km2 to 21887 km2 -- a 1864-fold inflation of a
+    // region with no data -- and did the same to 180 other British regions.
+    const big = squareFeature('big', 0, 0, 100, 1000);
+    const speck = squareFeature('speck', 10, 10, 0.4, 0); // far smaller than a cell
+    const r = cartogram(fc([big, speck]), {
+      method: 'flow', value: 'value', projection: 'none', grid: 64, runs: 4,
+    } as never);
+
+    const s = r.diagnostics.find((d) => d.id === 'speck')!;
+    // It may shrink, and it may be nudged by its neighbour, but flooring must not
+    // hand it a whole grid cell's worth of area.
+    expect(s.outputArea / s.inputArea).toBeLessThan(20);
+  });
+});

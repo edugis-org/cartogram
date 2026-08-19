@@ -137,17 +137,23 @@ export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams):
   // than the intended thousandfold. Flooring the value once gives every region a fixed
   // target that successive passes converge to instead of chasing.
   //
-  // The floor is one grid cell's worth of area, expressed as a value. Below that the
-  // grid simply cannot represent the region: it shrinks under a cell, gets handed a
-  // cell back so it appears in the field at all, is squeezed again next pass, and
-  // compounds away to nothing -- measured at 5e-14 of its original area for the UK
-  // regions, which is a point, not a polygon.
+  // The floor is one grid cell's worth of area -- below that the grid cannot represent
+  // the region at all, and it compounds away to nothing over successive passes -- but
+  // **capped at the region's own current area**, so that flooring can only ever stop a
+  // region shrinking, never make it grow.
+  //
+  // Without that cap the floor is a disaster on fine-grained data: a region smaller
+  // than a grid cell is *inflated* to a full cell. On NUTS 3 at grid 256 that took
+  // Tower Hamlets, which has no Eurostat population and so a value of zero, from 12
+  // km2 to 21887 km2, and did the same to 180 other British regions, burying the map
+  // under a mass of identical blobs.
   const [minX, minY, maxX, maxY] = bbox(g);
   const cellArea = Math.pow((Math.max(maxX - minX, maxY - minY) * params.padding) / params.grid, 2);
-  const floorValue = areaSum > 0 ? (valueSum * cellArea) / areaSum : 0;
   const effective = new Float64Array(n);
   let effectiveSum = 0;
   for (let f = 0; f < n; f++) {
+    const floorArea = Math.min(cellArea, areas0[f]!);
+    const floorValue = areaSum > 0 ? (valueSum * floorArea) / areaSum : 0;
     effective[f] = Math.max(values[f]!, floorValue);
     effectiveSum += effective[f]!;
   }
