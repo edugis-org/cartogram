@@ -274,7 +274,9 @@ npm test          # vitest
 npm run typecheck
 npm run build     # tsc -> dist/, ESM + .d.ts (the npm package)
 npm run bench     # benchmarks -> bench/results.json
-npm run app:dev   # the review harness at localhost:5174/harness/
+npm run app:dev   # the review harness at localhost:5174/harness/ (restart it after
+                  # adding a dependency: Vite pre-bundles them at startup, and a new
+                  # one shows up as a "Failed to fetch" from the worker until it does)
 npm run app:build # the harness as a deployable app -> dist-app/
 ```
 
