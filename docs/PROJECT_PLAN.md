@@ -244,7 +244,11 @@ worker-transferable and allocation-free. GeoJSON ↔ flat conversion happens onc
   move (each step costs a full inverse cosine transform -- 14 s of a 17 s run at grid 512),
   and passes stop when they no longer pay for themselves. NUTS 3 at grid 256 went from
   4141 ms to about 1300 ms. Left undone: the adaptive Runge-Kutta of the 2018 paper, which
-  is the remaining lever on step count.
+  is the remaining lever on step count. Benchmarking against go-cart-wasm
+  (`docs/BENCHMARK-GO-CART.md`) since put a number on that: their adaptive integrator
+  reaches 0.03% area error on the Dutch provinces where we reach 0.20%, and 1.21% on
+  NUTS 0 where we reach 5.51%. On the harder maps we are ahead (9.1% against 11.9% on
+  NUTS 2). Implementing the adaptive integrator is the clearest remaining improvement.
 
 ### M7 — Robustness & release (1 week)
 - Fuzz/property tests: holes, exclaves, antimeridian, degenerate slivers, zero/negative values,
