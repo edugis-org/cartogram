@@ -84,15 +84,31 @@ async function loadDataset(url: string): Promise<FeatureCollection> {
   const cached = cache.get(url);
   if (cached) return cached;
   els.status.textContent = `loading ${url}…`;
-  const fc = (await (await fetch(url)).json()) as FeatureCollection;
-  cache.set(url, fc);
-  return fc;
+  // Check the response: a 404 page parsed as JSON throws somewhere unhelpful, and the
+  // status line sits on "loading" forever with no clue what went wrong.
+  const response = await fetch(new URL(url, document.baseURI));
+  if (!response.ok) {
+    throw new Error(`could not load ${url} (HTTP ${response.status})`);
+  }
+  return await response.json().then((fc: FeatureCollection) => {
+    cache.set(url, fc);
+    return fc;
+  });
 }
 
 async function run(): Promise<void> {
   const spec = DATASETS.find((d) => d.url === els.dataset.value)!;
-  const fc = await loadDataset(spec.url);
   els.note.textContent = spec.note ?? '';
+
+  let fc: FeatureCollection;
+  try {
+    fc = await loadDataset(spec.url);
+  } catch (e) {
+    els.status.textContent = `error: ${(e as Error).message}`;
+    els.metrics.textContent = '—';
+    scene = null;
+    return;
+  }
 
   // Supersede any run still going: changing a parameter mid-run should not queue up
   // work whose result nobody wants.

@@ -14,7 +14,7 @@ import type { Feature } from 'geojson';
  */
 describe('review harness scene', () => {
   for (const d of DATASETS) {
-    const path = d.url.replace(/^\//, '');
+    const path = d.url.replace(/^\.\.\//, '');
     it.skipIf(!has(path))(`builds a scene for ${d.label}`, () => {
       const { scene, result } = buildScene(load(path), {
         value: d.attributes[0]!,
@@ -101,7 +101,7 @@ describe('review harness scene', () => {
 
   it('every catalogued dataset exists on disk with the attribute it claims', () => {
     for (const d of DATASETS) {
-      const path = d.url.replace(/^\//, '');
+      const path = d.url.replace(/^\.\.\//, '');
       expect(has(path), `${path} missing`).toBe(true);
       const data = load(path);
       const props = (data.features[0]!.properties ?? {}) as Record<string, unknown>;
