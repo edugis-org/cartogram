@@ -52,8 +52,9 @@ subdirectory, or straight off disk. `dist-app/index.html` redirects to `harness/
 app also works at a domain root. The datasets are copied into `dist-app/data/` at build
 time, because the harness fetches them at runtime.
 
-Deploying to GitHub Pages is then `npm run app:build` and publishing `dist-app/`, e.g. with
-a workflow on push to `main`.
+Deployment is automatic: `.github/workflows/deploy.yml` builds and publishes `dist-app/`
+on every push to `main`, at <https://edugis-org.github.io/cartogram/>. Typecheck and tests
+run first, so a broken library is not deployed as a working app.
 
 **Attribution is not optional for the app.** It ships Eurostat GISCO geometry
 (© EuroGeographics, attribution required) and CBS data (CC BY 4.0). The harness carries a

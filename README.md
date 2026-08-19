@@ -117,6 +117,8 @@ cost is the grid you choose rather than the data you give it. See
 
 ## Review harness
 
+**Live: <https://edugis-org.github.io/cartogram/>**
+
 Cartogram quality is not only area error: the map has to stay **recognizable**. The harness
 is where a person decides that, and it records the decision.
 
