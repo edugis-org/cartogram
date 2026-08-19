@@ -34,6 +34,7 @@ export { laea, cylindricalEqualArea, chooseProjection } from './io/project.ts';
 export { densify, autoSpacing } from './topology/densify.ts';
 export { buildVertexIndex, sharedFraction } from './topology/vertices.ts';
 export { CartogramWorker } from './worker/client.ts';
+export { rewind, isClockwise, ringSignedArea } from './prepare/rewind.ts';
 export type { WorkerOptions, WorkerRequest, WorkerResponse } from './worker/protocol.ts';
 
 /**

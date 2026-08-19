@@ -56,6 +56,46 @@ strange.
 the world map. Not a claim about correctness — some of those are inherited from the
 input — but our output is cleaner.
 
+## The comparison is at equal grid resolution
+
+go_cart's own header settles what it is doing, and it turns out to match this library's
+defaults closely:
+
+```c
+#define L (512)            /* Maximum dimension of the FFT lattice is L x L. */
+#define MAX_PERMITTED_AREA_ERROR (0.01)
+#define PADDING (1.5)
+#define BLUR_WIDTH (5e0)
+#define MIN_POP_FAC (0.2)  /* Replace area 0 by the minimum times this. */
+```
+
+So its grid is **512, fixed at compile time**, its target error 1% and its padding 1.5 —
+the same as our defaults, arrived at independently. Its blur is 5 cells against our 4,
+and it floors zero-valued regions much as we do, though at a far more generous 0.2 of
+the minimum.
+
+That matters for reading the table above: the "ours (grid 512)" rows are a like-for-like
+comparison, not a handicap. The remaining gap on well-behaved maps is therefore
+attributable to the **integrator**, not to resolution — which is exactly what makes the
+adaptive Runge–Kutta the thing worth implementing.
+
+## Using go-cart-wasm through this library
+
+```ts
+import initGoCart from 'go-cart-wasm';
+import { goCartCartogram } from '@edugis/cartogram/go-cart';
+
+const goCart = await initGoCart();
+const result = goCartCartogram(featureCollection, { goCart, value: 'population' });
+```
+
+`go-cart-wasm` is an **optional peer dependency**: install it only if you want this
+backend, and no WebAssembly is pulled in otherwise. The wrapper returns the identical
+`CartogramResult` the built-in methods return — same diagnostics, same metrics — so the
+two are directly interchangeable and comparable. It also supplies what go-cart-wasm
+does not have on its own: an equal-area projection step, missing- and negative-value
+policies, ring rewinding, and per-feature diagnostics.
+
 ## Practical notes for anyone comparing
 
 - **go-cart-wasm requires outer rings wound clockwise**, the pre-RFC-7946 convention.
@@ -64,7 +104,10 @@ input — but our output is cleaner.
   Earth already winds that way; the Dutch data does not. This library is
   winding-agnostic and needs no such preparation.
 - It requires already-projected, equal-area coordinates and offers no projection step.
-- It exposes no grid or tolerance parameter, so quality and runtime cannot be traded.
+- **It exposes no grid or tolerance parameter**, so quality and runtime cannot be traded.
+  `L` is `#define`d to 512 in the C and compiled into the WebAssembly; changing it means
+  rebuilding the WASM with the Emscripten toolchain, which is outside what this library
+  can offer.
 
 ## Conclusion
 

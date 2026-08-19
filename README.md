@@ -148,6 +148,25 @@ npm run harness      # http://localhost:5174/harness/
 The harness's own logic (`harness/scene.ts`) is DOM-free and covered by the test suite,
 because a harness that misaligns the two maps would invalidate every judgement made with it.
 
+## Using the reference implementation instead
+
+The authors' own C implementation is available as `go-cart-wasm`, and this library can
+drive it, so you keep one API and one metric suite either way:
+
+```ts
+import initGoCart from 'go-cart-wasm';
+import { goCartCartogram } from '@edugis/cartogram/go-cart';
+
+const goCart = await initGoCart();
+const result = goCartCartogram(featureCollection, { goCart, value: 'population' });
+```
+
+It is an optional peer dependency — nothing WebAssembly-shaped is installed unless you
+ask for it. Use it when you want the best accuracy on well-behaved maps and can afford a
+671 kB WASM payload; use the built-in `flow` when you want no WASM, a grid you can tune,
+or better results on maps full of very small regions. Numbers for both:
+[`docs/BENCHMARK-GO-CART.md`](docs/BENCHMARK-GO-CART.md).
+
 ## Choosing a method
 
 No cartogram preserves area, shape and topology at once — that trade-off is the subject
