@@ -35,7 +35,7 @@ export { topologyError, adjacency } from './metrics/topology.ts';
 export { shapePreservation, compactness, featurePerimeter } from './metrics/shape.ts';
 export { orientationPreservation } from './metrics/orientation.ts';
 export { selfIntersections } from './metrics/validity.ts';
-export { laea, cylindricalEqualArea, chooseProjection } from './io/project.ts';
+export { laea, equalEarth, cylindricalEqualArea, chooseProjection } from './io/project.ts';
 export { densify, autoSpacing } from './topology/densify.ts';
 export { buildVertexIndex, sharedFraction } from './topology/vertices.ts';
 export { CartogramWorker } from './worker/client.ts';
@@ -236,15 +236,14 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   // --- fit the result back inside the world -----------------------------------
   const latitudeLimit = options.fitLatitude ?? 85;
   if (latitudeLimit !== false && projection.name !== 'none') {
-    const [cx] = centreOfMass(packed, allFeatureAreas(packed));
-    const fit = fitToLatitude(packed, projection, cx, latitudeLimit);
+    const fit = fitToWorld(packed, projection, latitudeLimit);
     if (fit) {
       similarity(packed, fit.factor, fit.tx, fit.ty);
       warnings.push(
-        `the cartogram reached beyond ${latitudeLimit} degrees of latitude and was ` +
-          `scaled to ${(fit.factor * 100).toFixed(1)}% and centred vertically to bring ` +
-          `it back inside the world. Relative areas are unchanged; only the overall ` +
-          `size and position are.`,
+        `the cartogram reached outside the world (beyond ${latitudeLimit} degrees of ` +
+          `latitude or 180 of longitude) and was scaled to ` +
+          `${(fit.factor * 100).toFixed(1)}% and re-centred to bring it back in. ` +
+          `Relative areas are unchanged; only the overall size and position are.`,
       );
     }
   }
@@ -327,59 +326,68 @@ function now(): number {
 }
 
 /**
- * The similarity that brings a cartogram back inside `limit` degrees of latitude:
- * the largest scale that fits, with the result centred vertically.
+ * The similarity that brings a cartogram back inside the world: the largest scale at
+ * which every coordinate has a latitude within `limit` and a longitude within 180, with
+ * the result centred on what is left over.
  *
  * Returns null when nothing needs doing, which is the usual case -- a regional map has
- * no latitude to overflow, and this must leave it exactly alone.
+ * nothing to overflow, and this must leave it exactly alone.
+ *
+ * **Both bounds, not just latitude.** Which one binds depends on the plane: Lambert
+ * cylindrical is tall for its width, so latitude runs out first, while Equal Earth is
+ * wide for its height and lets longitude escape instead -- measured on world countries
+ * it reached 203 degrees while still inside 85 of latitude. A fit that watched only one
+ * of them would be correct on one projection and wrong on the next.
  *
  * **Why centred rather than scaled in place.** Shrinking about the map's centre of mass
- * top-aligns the result. The centre of mass of world countries sits well north of the
- * equator, so the north stays pinned against the limit while the south pulls away from
- * it: Russia ends up jammed against the top of the map and Antarctica floats off the
- * bottom. Centring the vertical extent instead shares the slack between the two, which
+ * aligns the result against whichever edge it was already pressed on. The centre of mass
+ * of world countries sits well north of the equator, so the north stays pinned against
+ * the limit while the south pulls away from it: Russia jammed against the top of the map
+ * and Antarctica floating off the bottom. Centring each extent shares the slack, which
  * is both what it should look like and a *smaller* shrink, since the map is no longer
- * being pushed up against one side of the band.
- *
- * The horizontal position is left where `preserveTotalArea` put it: nothing overflows
- * sideways in a way latitude cares about, so there is no reason to move it.
+ * being pushed against one side.
  *
  * **Why bisection rather than algebra.** The projection is a parameter. "Which y gives
  * latitude 85" is one line for the cylindrical case, a different one for the azimuthal
- * case, and nothing at all for the next projection added; the inverse is the only thing
- * every projection is guaranteed to offer. The search is monotone -- at a scale of zero
- * every point sits on the vertical centre line -- so bisection cannot get lost, and it
- * gives roughly a part in 10^12 in forty steps.
+ * case, another for Equal Earth, and nothing at all for the next projection added; the
+ * inverse is the only thing every projection is guaranteed to offer. The search is
+ * monotone -- at a scale of zero every point sits on the centre -- so bisection cannot
+ * get lost, and forty steps give roughly a part in 10^12.
  */
-function fitToLatitude(
+function fitToWorld(
   g: FlatGeometry,
   p: Projection,
-  cx: number,
   limit: number,
 ): { factor: number; tx: number; ty: number } | null {
   const c = g.coords;
   if (c.length === 0) return null;
 
+  let xMin = Infinity;
+  let xMax = -Infinity;
   let yMin = Infinity;
   let yMax = -Infinity;
-  for (let i = 1; i < c.length; i += 2) {
-    if (c[i]! < yMin) yMin = c[i]!;
-    if (c[i]! > yMax) yMax = c[i]!;
+  for (let i = 0; i < c.length; i += 2) {
+    if (c[i]! < xMin) xMin = c[i]!;
+    if (c[i]! > xMax) xMax = c[i]!;
+    if (c[i + 1]! < yMin) yMin = c[i + 1]!;
+    if (c[i + 1]! > yMax) yMax = c[i + 1]!;
   }
+  const xMid = (xMin + xMax) / 2;
   const yMid = (yMin + yMax) / 2;
 
-  // The transform for a given scale: horizontal position held, vertical extent centred.
+  // The transform for a given scale: both extents centred on the plane's origin, which
+  // for every projection here is the centre of the map it was built for.
   const at = (k: number): { factor: number; tx: number; ty: number } => ({
     factor: k,
-    tx: cx - cx * k,
+    tx: -k * xMid,
     ty: -k * yMid,
   });
 
   const fits = (k: number): boolean => {
     const { tx, ty } = at(k);
     for (let i = 0; i < c.length; i += 2) {
-      const [, lat] = p.inverse(c[i]! * k + tx, c[i + 1]! * k + ty);
-      if (!(Math.abs(lat) <= limit)) return false;
+      const [lon, lat] = p.inverse(c[i]! * k + tx, c[i + 1]! * k + ty);
+      if (!(Math.abs(lat) <= limit) || !(Math.abs(lon) <= 180)) return false;
     }
     return true;
   };

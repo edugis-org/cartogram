@@ -50,7 +50,18 @@ describe('fitting a cartogram back inside the world', () => {
     expect(atPole).toBe(0);
     expect(max).toBeLessThanOrEqual(85);
     expect(min).toBeGreaterThanOrEqual(-85);
-    expect(fitted.warnings.join(' ')).toMatch(/beyond 85 degrees/);
+    expect(fitted.warnings.join(' ')).toMatch(/outside the world/);
+  });
+
+  it('bounds longitude as well, which is what Equal Earth needs', () => {
+    // Which bound binds depends on the plane. Lambert cylindrical is tall for its width
+    // and runs out of latitude first; Equal Earth is wide for its height and lets
+    // longitude escape instead — before this it reached 203 degrees while still inside
+    // 85 of latitude, which is invalid GeoJSON and no use to a renderer.
+    for (const projection of ['equal-earth', 'cylindrical-equal-area'] as const) {
+      const lons = points(cartogram(world, { ...base, projection })).map(p => Math.abs(p[0]!));
+      expect(Math.max(...lons)).toBeLessThanOrEqual(180);
+    }
   });
 
   it('centres the result vertically rather than top-aligning it', () => {
@@ -79,7 +90,7 @@ describe('fitting a cartogram back inside the world', () => {
     const factor = Number(
       /scaled to ([\d.]+)%/.exec(cartogram(world, base).warnings.join(' '))?.[1],
     );
-    expect(factor).toBeGreaterThan(88);
+    expect(factor).toBeGreaterThan(85);
     expect(factor).toBeLessThan(100);
   });
 

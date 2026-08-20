@@ -9,11 +9,22 @@
   population, India and China grow enough to push Russia off the top of the map, and 1618
   of the returned points came back at ±90° because unprojecting an out-of-range
   coordinate clamps rather than fails. The result is now shrunk by the largest factor
-  that brings every coordinate inside, and centred vertically. On `world-110m` that is a
-  scale to 92%; it is a similarity, so area error, shape, topology and self-intersections
-  are bit-identical, and a map that never left the world is byte-for-byte untouched.
-  Centring is what makes it cheap — scaling about the centre of mass top-aligns the map
-  and costs 80% instead of 92%.
+  that brings every coordinate back inside the world — within ±85° of latitude and ±180°
+  of longitude — and re-centred. It is a similarity, so area error, shape, topology and
+  self-intersections are bit-identical, and a map that never left the world is
+  byte-for-byte untouched. Both bounds are checked because which one bites depends on the
+  plane: Lambert cylindrical runs out of latitude first, Equal Earth lets longitude
+  escape to 203° while still inside 85 of latitude. Centring is what makes it cheap —
+  scaling about the centre of mass presses the map against whichever edge it already
+  touched.
+- **Equal Earth**, and `projection: 'auto'` now picks it for world-scale data instead of
+  Lambert cylindrical equal-area. Both are equal-area, so this cannot change whether the
+  areas are right; what it changes is how well a square grid resolves the map. Lambert
+  cylindrical flattens everything above 50° into wide thin slabs a cell cannot follow. At
+  grid 512 the median area error goes from 0.600% to 0.440% on `world-110m`, 1.368% to
+  1.354% on `world-50m` and 0.096% to 0.030% on NUTS 0, with the self-intersection count
+  roughly halving on both world sets. Available by name as `projection: 'equal-earth'`;
+  `'cylindrical-equal-area'` is unchanged and still selectable.
 - **`grid: 'auto'` for the flow method.** Sizes the grid so the smallest region carrying
   real value gets at least one cell, ignoring regions whose value is negligible. Never
   goes below the default, capped at 1024. On NUTS 3 it picks 1024 over 512, which takes

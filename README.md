@@ -13,7 +13,7 @@ import { cartogram } from '@edugis/cartogram';
 const result = cartogram(featureCollection, {
   method: 'flow',         // 'identity' | 'olson' | 'dcn' | 'flow' | 'dorling' | 'demers'
   value: 'population',    // property name, or (feature, i) => number
-  projection: 'auto',     // 'auto' | 'none' | 'laea' | 'cylindrical-equal-area'
+  projection: 'auto',     // 'auto' | 'none' | 'laea' | 'equal-earth' | 'cylindrical-equal-area'
   missing: 'error',       // 'error' | 'zero' | 'mean' | 'drop'
   negative: 'error',      // 'error' | 'clamp'
   densify: 'auto',        // insert vertices before warping; 'auto' | number | false
@@ -80,7 +80,7 @@ node dist/cli.js data/real/nl-provinces.geojson --value POP_2021 -o out.geojson
   shared edges subdivided into bit-identical points from both sides.
 - **Metrics**: cartographic error, adjacency Jaccard topology error, relative-position rank
   correlation, and the anti-blob guard.
-- **Equal-area projections**, written from the formulas with exact inverses: Lambert
+- **Equal-area projections**, written from the formulas with exact inverses: Equal Earth, Lambert
   azimuthal for regional maps, Lambert cylindrical for near-global ones, auto-selected.
   Cartograms are about area, so this is a correctness requirement, not a nicety.
 - **57 tests**, including the M1 exit criterion run over all 15 datasets in `data/`.
@@ -206,15 +206,40 @@ enough to push Russia off the top of the map: 1618 of the returned points came b
 them onto the pole line and smearing the shapes that own them.
 
 `fitLatitude` (default 85) shrinks the finished cartogram by the largest factor that
-brings every coordinate inside, and centres it vertically. On `world-110m` that is a
-scale to 92%, and it is a similarity: area error, shape, topology and self-intersections
-come back bit-identical. A map that never left the world — anything regional — is not
-touched at all, and the result is byte-for-byte what `fitLatitude: false` gives.
+brings every coordinate back inside the world — within ±85° of latitude and ±180° of
+longitude — and re-centres it. On `world-110m` that is a scale to 97%, and it is a
+similarity: area error, shape, topology and self-intersections come back bit-identical. A
+map that never left the world — anything regional — is not touched at all, and the result
+is byte-for-byte what `fitLatitude: false` gives.
+
+Both bounds are checked because which one bites depends on the working plane. Lambert
+cylindrical is tall for its width and runs out of latitude first; Equal Earth is wide for
+its height and lets longitude escape instead, reaching 203° on the same map while still
+inside 85 of latitude.
 
 Centring matters as much as the scale. The centre of mass of world countries sits well
-north of the equator, so scaling about it top-aligns the map: Russia stays jammed
-against the limit while Antarctica floats off the bottom. Centring shares the slack, and
-needs less shrink for it — 92% rather than 80%.
+north of the equator, so scaling about it aligns the map against whichever edge it was
+already pressed on: Russia jammed against the top while Antarctica floats off the bottom.
+Centring shares the slack, and needs less shrink for it.
+
+### Which plane the warp happens in
+
+`projection: 'auto'` picks Equal Earth for a world map and Lambert azimuthal equal-area
+for a regional one. Both are equal-area, so the choice cannot make the areas more or less
+correct — a cartogram warped in any equal-area plane has the right areas on the ground.
+
+What it changes is how well the flow's *square grid* resolves the map, and that is
+measurable. At grid 512:
+
+| dataset | Equal Earth | Lambert cylindrical |
+|---|---|---|
+| world-110m | **0.440%** median, 12 self-intersections | 0.600%, 23 |
+| world-50m | **1.354%** median, 77 | 1.368%, 130 |
+| nuts0-20m | **0.030%** median | 0.096% |
+
+Lambert cylindrical flattens everything above 50° into wide thin slabs that a square cell
+cannot follow; Equal Earth's meridians curve inwards, so the same regions keep a shape
+the grid can resolve. It is still available as `projection: 'cylindrical-equal-area'`.
 
 ### Grid resolution
 

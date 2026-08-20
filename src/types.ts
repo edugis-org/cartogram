@@ -17,7 +17,12 @@ export type ValueAccessor = string | ((feature: Feature, index: number) => numbe
 export type MissingPolicy = 'error' | 'zero' | 'mean' | 'drop';
 
 /** Planar working coordinate system. */
-export type ProjectionName = 'auto' | 'none' | 'laea' | 'cylindrical-equal-area';
+export type ProjectionName =
+  | 'auto'
+  | 'none'
+  | 'laea'
+  | 'equal-earth'
+  | 'cylindrical-equal-area';
 
 export type MethodName = 'identity' | 'olson' | 'dcn' | 'dorling' | 'demers' | 'flow';
 
@@ -31,15 +36,16 @@ export interface CommonOptions {
   /**
    * Equal-area projection applied before the transform. Cartograms are about area,
    * so lon/lat input MUST be projected or the result is wrong. Default `auto`:
-   * `none` if the coordinates are not lon/lat, cylindrical equal-area for
-   * near-global extents, otherwise Lambert azimuthal equal-area centred on the data.
+   * `none` if the coordinates are not lon/lat, Equal Earth for near-global extents,
+   * otherwise Lambert azimuthal equal-area centred on the data.
    */
   projection?: ProjectionName;
   /** Return coordinates in the input CRS. Default `true`. */
   unproject?: boolean;
   /**
-   * Shrink the finished cartogram until every coordinate is within this latitude, in
-   * degrees. Default 85. `false` disables it.
+   * Shrink the finished cartogram until every coordinate is back inside the world:
+   * within this latitude, in degrees, and within 180 of longitude. Default 85. `false`
+   * disables it.
    *
    * A cartogram deliberately moves regions off the graticule they came from, and in a
    * plane there is nothing to stop that leaving the world. On world countries sized by
@@ -48,8 +54,14 @@ export interface CommonOptions {
    * a place. Unprojecting them does not fail, it *clamps*, quietly pressing hundreds of
    * points onto the pole line and smearing the shapes that owned them.
    *
-   * The fix is a uniform scale about the map's centre of mass, chosen as the largest
-   * factor that brings every point inside. Uniform is the whole point: relative areas,
+   * Which bound bites depends on the working plane. Lambert cylindrical is tall for its
+   * width and runs out of latitude first; Equal Earth is wide for its height and lets
+   * longitude escape instead, reaching 203 degrees on the same map while still inside 85
+   * of latitude. Both are checked.
+   *
+   * The fix is a uniform scale, chosen as the largest factor that brings every point
+   * inside, with the result re-centred so the slack is shared rather than left against
+   * one edge. Uniform is the whole point: relative areas,
    * shapes, topology and every quality metric are untouched -- a cartogram is read for
    * the ratios between regions, and those survive exactly. What changes is the overall
    * size, which nothing in the mathematics pins anyway.
