@@ -23,6 +23,7 @@ const els = {
   gocartParams: $('gocart-params'),
   flowParams: $('flow-params'),
   grid: $<HTMLSelectElement>('grid'),
+  fitLatitude: $<HTMLInputElement>('fitLatitude'),
   gradient: $<HTMLSelectElement>('gradient'),
   tolerance: $<HTMLInputElement>('tolerance'),
   runs: $<HTMLInputElement>('runs'),
@@ -80,6 +81,7 @@ function runKey(): string {
           ? `g${els.grid.value} runs${els.runs.value} blur${els.blur.value} ${els.gradient.value} tol${els.tolerance.value}`
           : '-',
     els.projection.value,
+    els.fitLatitude.checked ? 'fit85' : 'nofit',
     els.missing.value,
   ].join(' | ');
 }
@@ -125,13 +127,14 @@ async function run(): Promise<void> {
     method: els.method.value as HarnessMethod,
     fit: els.fit.value as 'total' | 'max',
     projection: els.projection.value as ProjectionName,
+    fitLatitude: els.fitLatitude.checked ? 85 : false,
     missing: els.missing.value as MissingPolicy,
     iterations: Number(els.iterations.value),
     shapeAnchor: Number(els.shapeAnchor.value),
     cutoff: Number(els.cutoff.value),
     damping: Number(els.damping.value),
     fill: Number(els.fill.value),
-    grid: Number(els.grid.value),
+    grid: els.grid.value === 'auto' ? 'auto' : Number(els.grid.value),
     runs: Number(els.runs.value),
     blur: Number(els.blur.value),
   };
@@ -202,6 +205,12 @@ function showMetrics(r: CartogramResult): void {
         m.topology.error < 0.05 ? 'good' : 'bad',
       ),
     );
+  }
+  if (m.resolved) {
+    // What `grid: auto` actually chose. Worth seeing next to the result: an auto run is
+    // otherwise indistinguishable from a fixed one, and the grid is the single setting
+    // that most often explains a disappointing map.
+    parts.push(metric('grid used', String(m.resolved.grid)));
   }
   if (m.selfIntersections !== undefined) {
     parts.push(
@@ -479,7 +488,7 @@ function syncMethodControls(): void {
 for (const el of [
   els.attribute, els.missing, els.method, els.fit, els.projection,
   els.iterations, els.shapeAnchor, els.cutoff, els.damping, els.fill,
-  els.grid, els.runs, els.blur, els.gradient, els.tolerance,
+  els.grid, els.runs, els.blur, els.gradient, els.tolerance, els.fitLatitude,
 ]) {
   el.addEventListener('change', () => {
     syncMethodControls();

@@ -29,21 +29,50 @@ export interface FlowParams {
    * - `analytic` — differentiate the cosine series in the spectrum and evaluate the
    *   resulting sine series, which is exact for the field being represented.
    *
-   * `analytic` sounds like it should win and measurably does not: on the Dutch
-   * provinces it moves the mean area error from 0.198% to 0.174% and doubles the
-   * runtime. Both figures are far below anything a reader can see — 0.2% area error is
-   * a tenth of a percent of linear scale, about 100 m on a 40 km province — so the
-   * cheaper path is the default and this option exists for anyone who needs the
-   * numerical exactness for its own sake.
+   * How much `analytic` buys depends on the map, and this option was once documented as
+   * buying nothing on the strength of a measurement taken on one dataset -- a caution
+   * worth keeping in mind for every other number in this file. On the Dutch provinces it
+   * moves the median area error from 0.146% to 0.141%, which really is nothing: twelve
+   * regions of similar density, a field the differences resolve perfectly well. On NUTS
+   * 2 the same switch moves it from 1.334% to 0.412%, and on world countries from 0.685%
+   * to 0.501%.
+   *
+   * The pattern is that the two agree wherever the density field is smooth at the scale
+   * of a cell, and diverge wherever it is not -- which is to say on maps with many
+   * regions and sharp density contrasts, the maps this method exists for.
+   *
+   * `differences` remains the default because it costs about a third of the runtime and
+   * because the accuracy it gives up is invisible on a small map. On world countries
+   * `analytic` also takes the self-intersection count from 17 to 48, so it is not a free
+   * improvement even where it improves the areas.
    */
   gradient: 'analytic' | 'differences';
   /**
-   * Local error tolerance for the adaptive step, in grid cells. Default 0.02.
+   * Local error tolerance for the adaptive step, in grid cells. Default 0.2.
    *
    * The integrator estimates how far a step is wrong by comparing its second-order
    * result against the first-order one it contains, and shrinks or grows the step to
-   * hold that estimate near this value. Tighter costs steps; each step is a full
-   * inverse cosine transform, which is the dominant expense of the method.
+   * hold that estimate near this value.
+   *
+   * Tightening it makes the result *worse*, which is worth understanding before
+   * touching it. Swept over the seven datasets in `data/` at grid 512, 0.2 beat 0.02 on
+   * the median area error of six of them and tied on the seventh, at half the runtime:
+   * NUTS 2 went 1.334% -> 1.034%, world countries 0.685% -> 0.600%, the Dutch provinces
+   * 0.146% -> 0.097%. 0.3 is past the edge -- it regresses on the municipalities and on
+   * world countries -- so 0.2 is where the default sits.
+   *
+   * The reason is the pass's own stopping rule a few lines below: a run ends when the
+   * largest vertex movement *in one step* falls below a threshold, and that movement
+   * scales with the step size. A tight tolerance keeps the steps small, so the rule
+   * fires while the flow still has somewhere to go, and the pass ends early. The
+   * accuracy a tight tolerance buys inside a pass is worth less than the flow it costs.
+   *
+   * That is an interaction rather than a design, and the honest fix is to make the
+   * stopping rule independent of the step size. An attempt at it -- comparing a speed
+   * rather than a displacement -- made every dataset several times worse, because `h`
+   * grows well past 1 and dividing by it tightened the rule instead of loosening it. It
+   * needs its own calibration sweep, and until then the default is set where the
+   * measurements put it.
    */
   tolerance: number;
   /** Passes over the whole flow, each with half the blur of the last. Default 10. */
@@ -59,7 +88,7 @@ export const FLOW_DEFAULTS: FlowParams = {
   padding: 1.5,
   targetError: 0.01,
   stepsPerRun: 200,
-  tolerance: 0.02,
+  tolerance: 0.2,
   floorCells: 0.05,
   gradient: 'differences',
   runs: 10,
@@ -109,9 +138,11 @@ export interface FlowReport {
  * outer pass structure below. So: the same physics and the same flow formulation,
  * with the integration engineered independently, and measured rather than assumed.
  *
- * A second deviation: the velocity field comes from central differences on the
- * diffused grid rather than analytic sine/cosine transforms of the gradient. The field
- * is smooth by construction, so the difference is small and it halves the transforms.
+ * A second deviation: the velocity field comes by default from central differences on
+ * the diffused grid rather than analytic sine/cosine transforms of the gradient, which
+ * cuts the transforms per step from three to one. How much accuracy that gives up is a
+ * property of the map rather than of the method -- nothing on a dozen similar regions,
+ * a factor of three on NUTS 2. See `gradient`.
  */
 export function flow(g: FlatGeometry, values: Float64Array, params: FlowParams): FlowReport {
   const n = g.featCount;

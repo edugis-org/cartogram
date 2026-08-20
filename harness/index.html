@@ -69,26 +69,33 @@
           <div id="flow-params">
             <label>Grid
               <select id="grid">
+                <option value="auto" selected>auto — sized to the smallest region that matters</option>
                 <option value="128">128 — fast, coarse</option>
-                <option value="256" selected>256</option>
+                <option value="256">256</option>
                 <option value="512">512 — high quality, slow</option>
                 <option value="1024">1024 — finest, very slow</option>
               </select>
             </label>
             <label>Passes <input type="number" id="runs" min="1" max="20" step="1" value="10" /></label>
             <label>Blur (first pass, cells) <input type="number" id="blur" min="0" max="16" step="0.5" value="4" /></label>
-            <label>Velocity field
+            <label>Velocity field (gradient)
               <select id="gradient">
                 <option value="differences" selected>central differences — 1 transform/step</option>
                 <option value="analytic">analytic — exact, 3 transforms/step</option>
               </select>
             </label>
-            <label>Step tolerance (cells) <input type="number" id="tolerance" min="0.001" max="0.5" step="0.005" value="0.02" /></label>
+            <label>Step tolerance (cells) <input type="number" id="tolerance" min="0.001" max="0.5" step="0.005" value="0.2" /></label>
             <p class="note">
               Each pass re-rasterizes the current map and halves the blur. Small regions
               need a finer grid: they are only as accurate as the cells they cover, and a
-              region smaller than one cell can only be approximated. Watch the
-              under-resolved warning — for NUTS 3, 512 or 1024.
+              region smaller than one cell can only be approximated — which is why
+              <em>auto</em> is the default here. It sizes the grid to the smallest region
+              that carries real value, and <em>grid used</em> below reports what it chose.
+              On NUTS 3 that is 1024 rather than 256, and the difference is 4% area error
+              against 16%: at a coarse grid you are reviewing the grid, not the method.
+              It costs the time — 20 to 35 s on the larger sets against 2 to 7 s on the
+              smaller ones. Pin a fixed grid when comparing runs, or for a fair race
+              against go-cart, which is hard-wired to 512.
             </p>
           </div>
           <div id="gocart-params">
@@ -96,14 +103,16 @@
               The reference C implementation, compiled to WebAssembly. It takes no
               parameters: its grid is fixed at <strong>512</strong>
               (<code>#define L (512)</code>), as are its 1% error target and 1.5 padding.
-              For a fair speed comparison set <em>flow</em> to grid 512 — at 256 our
-              method is doing a quarter of the grid work. Its runtime also varies far
+              For a fair speed comparison pin <em>flow</em> to grid 512 rather than
+              leaving it on auto, which picks 1024 on most of these datasets and so does
+              four times the grid work. Its runtime also varies far
               more with the data than ours: about 2 s on NUTS 2 but 25 s on NUTS 0.
             </p>
           </div>
           <div id="dorling-params">
             <label>Fill (symbol area / map area) <input type="number" id="fill" min="0.05" max="0.9" step="0.05" value="0.3" /></label>
           </div>
+          <label class="check" id="fit-latitude-row"><input type="checkbox" id="fitLatitude" checked /> fit inside &plusmn;85&deg; latitude</label>
           <label>Projection
             <select id="projection">
               <option value="auto" selected>auto</option>

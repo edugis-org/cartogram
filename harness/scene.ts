@@ -19,13 +19,14 @@ export interface RunSpec {
   method: HarnessMethod;
   fit?: 'total' | 'max';
   projection?: ProjectionName;
+  fitLatitude?: number | false;
   missing?: MissingPolicy;
   iterations?: number;
   shapeAnchor?: number;
   cutoff?: number;
   damping?: number;
   fill?: number;
-  grid?: number;
+  grid?: number | 'auto';
   runs?: number;
   blur?: number;
   gradient?: 'analytic' | 'differences';
@@ -68,6 +69,7 @@ export function runOptions(spec: RunSpec): CartogramOptions {
     missing: spec.missing ?? 'zero',
     negative: 'clamp',
     unproject: false, // stay in the equal-area plane; that is what we are judging
+    ...(spec.fitLatitude !== undefined ? { fitLatitude: spec.fitLatitude } : {}),
     includeBaseline: true,
     method: spec.method,
     ...(spec.method === 'olson' ? { fit: spec.fit ?? 'total' } : {}),

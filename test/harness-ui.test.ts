@@ -22,6 +22,16 @@ describe('harness markup matches the script', () => {
     }
   });
 
+  it('offers every setting the library takes an "auto" for', () => {
+    // A library option with no control is an option nobody in the harness can review.
+    // `grid: 'auto'` was added to the API and forgotten here for exactly that reason.
+    expect(html, `grid dropdown has no 'auto' option`).toMatch(
+      /<select id="grid">[\s\S]*?value="auto"/,
+    );
+    expect(main, `main.ts turns every grid value into a number, so 'auto' becomes NaN`)
+      .toContain(`els.grid.value === 'auto' ? 'auto' : Number(els.grid.value)`);
+  });
+
   it('has an element for every id the script looks up', () => {
     const ids = new Set<string>();
     for (const m of main.matchAll(/\$(?:<[^>]+>)?\('([^']+)'\)/g)) ids.add(m[1]!);

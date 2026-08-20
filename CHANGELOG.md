@@ -1,5 +1,42 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`fitLatitude` (default 85).** A cartogram moves regions off the graticule they came
+  from, and in a plane nothing stops that leaving the world: on world countries sized by
+  population, India and China grow enough to push Russia off the top of the map, and 1618
+  of the returned points came back at ±90° because unprojecting an out-of-range
+  coordinate clamps rather than fails. The result is now shrunk by the largest factor
+  that brings every coordinate inside, and centred vertically. On `world-110m` that is a
+  scale to 92%; it is a similarity, so area error, shape, topology and self-intersections
+  are bit-identical, and a map that never left the world is byte-for-byte untouched.
+  Centring is what makes it cheap — scaling about the centre of mass top-aligns the map
+  and costs 80% instead of 92%.
+- **`grid: 'auto'` for the flow method.** Sizes the grid so the smallest region carrying
+  real value gets at least one cell, ignoring regions whose value is negligible. Never
+  goes below the default, capped at 1024. On NUTS 3 it picks 1024 over 512, which takes
+  the median area error from 15.9% to 4.1%. `metrics.resolved.grid` reports the choice.
+  The harness defaults to it, because at a coarse grid you are reviewing the grid rather
+  than the method.
+
+### Changed
+
+- **`tolerance` default 0.02 → 0.2.** Tightening it made results *worse* as well as
+  slower. Swept over all seven datasets in `data/` at grid 512, 0.2 beat 0.02 on the
+  median area error of six and tied on the seventh, at half the runtime. The cause is an
+  interaction rather than a design: a pass stops when the largest vertex movement *in one
+  step* gets small, and that movement scales with the step size, so a tight tolerance
+  ends the pass while the flow still has somewhere to go. Making the stopping rule
+  step-size independent needs its own calibration sweep and is not done here.
+- The `gradient` option was documented as buying 0.02 percentage points of area error for
+  twice the runtime — a figure measured on the twelve Dutch provinces alone, where it is
+  genuinely worth nothing. On NUTS 2 the same switch takes the median area error from
+  1.334% to 0.412%. Documented with the measurements it actually has, including the cost:
+  about 3x the runtime, and on world countries the self-intersection count goes from 17
+  to 48.
+
 ## 0.1.2 — 2026-08-20
 
 Work in progress: the flow method changed substantially, and the numbers moved in both

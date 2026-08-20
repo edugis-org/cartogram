@@ -6,11 +6,13 @@ import type {
   FeatureDiagnostic,
   IterationReport,
 } from './types.ts';
+import type { FlatGeometry } from './geometry/flat.ts';
 import { pack, unpack, cloneCoords, vertexCount } from './geometry/flat.ts';
 import { densify, autoSpacing } from './topology/densify.ts';
-import { allFeatureAreas, centreOfMass, similarity } from './geometry/area.ts';
-import { partition } from './io/validate.ts';
+import { allFeatureAreas, bbox, centreOfMass, similarity } from './geometry/area.ts';
+import { looksLikeLonLat, partition } from './io/validate.ts';
 import { extractValues } from './io/values.ts';
+import type { Projection } from './io/project.ts';
 import { chooseProjection, projectInPlace, unprojectInPlace } from './io/project.ts';
 import { olson } from './methods/olson.ts';
 import { dcn, DCN_DEFAULTS } from './methods/dcn.ts';
@@ -102,6 +104,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
   const t0 = now();
   let targetAreas: Float64Array;
   let iteration: IterationReport | undefined;
+  let resolved: { grid: number } | undefined;
   switch (options.method) {
     case 'identity':
       targetAreas = inputAreas.slice();
@@ -131,8 +134,14 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
       break;
     }
     case 'flow': {
-      const report = flow(packed, keptValues, {
-        grid: options.grid ?? FLOW_DEFAULTS.grid,
+      // `grid: 'auto'` needs the projected, densified geometry and the values, so it is
+      // resolved here rather than with the other options.
+      const resolvedGrid =
+        options.grid === 'auto'
+          ? autoGrid(packed, keptValues, options.padding ?? FLOW_DEFAULTS.padding)
+          : (options.grid ?? FLOW_DEFAULTS.grid);
+      const params = {
+        grid: resolvedGrid,
         padding: options.padding ?? FLOW_DEFAULTS.padding,
         targetError: options.targetError ?? FLOW_DEFAULTS.targetError,
         stepsPerRun: options.stepsPerRun ?? FLOW_DEFAULTS.stepsPerRun,
@@ -143,8 +152,10 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
         blur: options.blur ?? FLOW_DEFAULTS.blur,
         onIteration: options.onIteration,
         signal: options.signal,
-      });
+      };
+      const report = flow(packed, keptValues, params);
       targetAreas = report.targetAreas;
+      resolved = { grid: resolvedGrid };
       if (report.underResolved > 0) {
         warnings.push(
           `${report.underResolved} features are smaller than one grid cell and had to be ` +
@@ -222,6 +233,22 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     }
   }
 
+  // --- fit the result back inside the world -----------------------------------
+  const latitudeLimit = options.fitLatitude ?? 85;
+  if (latitudeLimit !== false && projection.name !== 'none') {
+    const [cx] = centreOfMass(packed, allFeatureAreas(packed));
+    const fit = fitToLatitude(packed, projection, cx, latitudeLimit);
+    if (fit) {
+      similarity(packed, fit.factor, fit.tx, fit.ty);
+      warnings.push(
+        `the cartogram reached beyond ${latitudeLimit} degrees of latitude and was ` +
+          `scaled to ${(fit.factor * 100).toFixed(1)}% and centred vertically to bring ` +
+          `it back inside the world. Relative areas are unchanged; only the overall ` +
+          `size and position are.`,
+      );
+    }
+  }
+
   // --- measure (in the projected plane, before unprojecting) ------------------
   const outputAreas = allFeatureAreas(packed);
   const { perFeature: errors, summary } = cartographicError(outputAreas, keptValues);
@@ -232,6 +259,7 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
     vertexCount: vertexCount(packed),
     runtimeMs,
     ...(densification ? { densification } : {}),
+    ...(resolved ? { resolved } : {}),
   };
 
   let perFeatureDrift: Float64Array | undefined;
@@ -296,4 +324,124 @@ export function cartogram(input: GeoJsonObject, options: CartogramOptions): Cart
 
 function now(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
+/**
+ * The similarity that brings a cartogram back inside `limit` degrees of latitude:
+ * the largest scale that fits, with the result centred vertically.
+ *
+ * Returns null when nothing needs doing, which is the usual case -- a regional map has
+ * no latitude to overflow, and this must leave it exactly alone.
+ *
+ * **Why centred rather than scaled in place.** Shrinking about the map's centre of mass
+ * top-aligns the result. The centre of mass of world countries sits well north of the
+ * equator, so the north stays pinned against the limit while the south pulls away from
+ * it: Russia ends up jammed against the top of the map and Antarctica floats off the
+ * bottom. Centring the vertical extent instead shares the slack between the two, which
+ * is both what it should look like and a *smaller* shrink, since the map is no longer
+ * being pushed up against one side of the band.
+ *
+ * The horizontal position is left where `preserveTotalArea` put it: nothing overflows
+ * sideways in a way latitude cares about, so there is no reason to move it.
+ *
+ * **Why bisection rather than algebra.** The projection is a parameter. "Which y gives
+ * latitude 85" is one line for the cylindrical case, a different one for the azimuthal
+ * case, and nothing at all for the next projection added; the inverse is the only thing
+ * every projection is guaranteed to offer. The search is monotone -- at a scale of zero
+ * every point sits on the vertical centre line -- so bisection cannot get lost, and it
+ * gives roughly a part in 10^12 in forty steps.
+ */
+function fitToLatitude(
+  g: FlatGeometry,
+  p: Projection,
+  cx: number,
+  limit: number,
+): { factor: number; tx: number; ty: number } | null {
+  const c = g.coords;
+  if (c.length === 0) return null;
+
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (let i = 1; i < c.length; i += 2) {
+    if (c[i]! < yMin) yMin = c[i]!;
+    if (c[i]! > yMax) yMax = c[i]!;
+  }
+  const yMid = (yMin + yMax) / 2;
+
+  // The transform for a given scale: horizontal position held, vertical extent centred.
+  const at = (k: number): { factor: number; tx: number; ty: number } => ({
+    factor: k,
+    tx: cx - cx * k,
+    ty: -k * yMid,
+  });
+
+  const fits = (k: number): boolean => {
+    const { tx, ty } = at(k);
+    for (let i = 0; i < c.length; i += 2) {
+      const [, lat] = p.inverse(c[i]! * k + tx, c[i + 1]! * k + ty);
+      if (!(Math.abs(lat) <= limit)) return false;
+    }
+    return true;
+  };
+
+  if (fits(1)) {
+    // Already inside. Centring it anyway would move a map that had no problem.
+    return null;
+  }
+
+  let inside = 0;
+  let outside = 1;
+  for (let step = 0; step < 40; step++) {
+    const mid = (inside + outside) / 2;
+    if (fits(mid)) inside = mid;
+    else outside = mid;
+  }
+  return at(inside);
+}
+
+
+/**
+ * A grid resolution sized to the map, rather than to a default.
+ *
+ * The flow's resolution limit is one specific thing: a region smaller than a grid cell
+ * cannot be represented in the density field, so it exerts no pressure and comes out
+ * shrunk no matter how dense it is. Paris is 105 km^2 holding 2.1 million people and is
+ * exactly this failure. So the grid is chosen to give the smallest region *that carries
+ * real value* at least one cell.
+ *
+ * The value filter is what makes this usable rather than absurd. Sizing to the smallest
+ * region outright asks for a grid of 82,000 on world countries, because somewhere in the
+ * file there is an islet; the binding region has to be one whose absence would be
+ * visible. A tenth of the mean share is a low bar that still excludes the rocks -- on
+ * world countries it lands on Singapore, on NUTS 3 on Melilla, on NUTS 2 on Brussels,
+ * which are precisely the regions this is for.
+ *
+ * Clamped to 1024 because the transforms go as N^2 log N and the next doubling costs
+ * four to five times the runtime for a diminishing return. Where 1024 is still not
+ * enough the under-resolved warning says so and names the count.
+ */
+function autoGrid(g: FlatGeometry, values: Float64Array, padding: number): number {
+  const areas = allFeatureAreas(g);
+  const n = g.featCount;
+  let total = 0;
+  for (let f = 0; f < n; f++) total += values[f]!;
+  if (!(total > 0) || n === 0) return FLOW_DEFAULTS.grid;
+
+  // A tenth of the mean value share: low enough to keep every region a reader would
+  // miss, high enough to drop the ones that would cost everyone else a slowdown.
+  const floor = total / (10 * n);
+  let smallest = Infinity;
+  for (let f = 0; f < n; f++) {
+    if (values[f]! >= floor && areas[f]! > 0 && areas[f]! < smallest) smallest = areas[f]!;
+  }
+  if (!Number.isFinite(smallest)) return FLOW_DEFAULTS.grid;
+
+  const [minX, minY, maxX, maxY] = bbox(g);
+  const needed = (Math.max(maxX - minX, maxY - minY) * padding) / Math.sqrt(smallest);
+
+  const power = 1 << Math.ceil(Math.log2(Math.max(needed, 1)));
+  // Never below the default: `auto` exists to notice that a map needs a finer grid, not
+  // to save time on one that does not. Sizing purely to the minimum viable grid picks
+  // 256 for NUTS 0 and costs 0.51% -> 1.25% area error for the privilege.
+  return Math.min(1024, Math.max(FLOW_DEFAULTS.grid, power));
 }

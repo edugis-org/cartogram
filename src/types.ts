@@ -37,6 +37,33 @@ export interface CommonOptions {
   projection?: ProjectionName;
   /** Return coordinates in the input CRS. Default `true`. */
   unproject?: boolean;
+  /**
+   * Shrink the finished cartogram until every coordinate is within this latitude, in
+   * degrees. Default 85. `false` disables it.
+   *
+   * A cartogram deliberately moves regions off the graticule they came from, and in a
+   * plane there is nothing to stop that leaving the world. On world countries sized by
+   * population, India and China grow enough to push Russia clean off the top of the
+   * map: the coordinates that come back have latitudes at or beyond +-90, which is not
+   * a place. Unprojecting them does not fail, it *clamps*, quietly pressing hundreds of
+   * points onto the pole line and smearing the shapes that owned them.
+   *
+   * The fix is a uniform scale about the map's centre of mass, chosen as the largest
+   * factor that brings every point inside. Uniform is the whole point: relative areas,
+   * shapes, topology and every quality metric are untouched -- a cartogram is read for
+   * the ratios between regions, and those survive exactly. What changes is the overall
+   * size, which nothing in the mathematics pins anyway.
+   *
+   * 85 rather than 90 because the last few degrees are where a cylindrical projection's
+   * shape distortion runs away, and because a shape sitting exactly on the limit has
+   * nowhere to be drawn.
+   *
+   * Only applies when the working plane is a geographic projection; data that arrived
+   * planar has no latitude to overflow. It runs after `preserveTotalArea` and overrides
+   * it where the two disagree, because a coordinate outside the world is not a question
+   * of size.
+   */
+  fitLatitude?: number | false;
   /** Compute quality metrics (adds a pass over the geometry). Default `true`. */
   metrics?: boolean;
   /**
@@ -154,8 +181,27 @@ export interface DorlingOptions extends CommonOptions {
  */
 export interface FlowOptions extends CommonOptions {
   method: 'flow';
-  /** Grid resolution per side, a power of two. Default 512. Higher = finer, slower. */
-  grid?: number;
+  /**
+   * Grid resolution per side, a power of two. Default 512. Higher = finer, slower.
+   *
+   * `'auto'` never goes below the default -- it only raises the grid where the data needs
+   * it. Sizing purely to what is needed also *lowers* it on maps with no small regions,
+   * and that measurably costs accuracy for a saving nobody asked for: on NUTS 0 the
+   * minimum viable grid is 256, which takes the area error from 0.51% to 1.25%.
+   *
+   * It sizes the grid from the data: the finest thing the flow has to
+   * resolve is the *smallest region that carries real value*, because a region smaller
+   * than one cell cannot exert pressure and comes out shrunk however dense it is —
+   * Paris is 105 km² holding 2.1 million people. So the grid is chosen to give that
+   * region at least one cell, ignoring regions whose value is negligible (a rock with
+   * nine inhabitants should not cost everyone else a fourfold slowdown), and clamped to
+   * 1024.
+   *
+   * It is not the default, because it is not free: on NUTS 3 it picks 1024 over 512,
+   * which takes the area error from 15.9% to 4.5% and the runtime from 13 to 60
+   * seconds. That is usually the right trade and it should still be the caller's.
+   */
+  grid?: number | 'auto';
   /** Domain size as a multiple of the map's larger dimension. Default 1.5. */
   padding?: number;
   /** Stop once the mean cartographic error reaches this. Default 0.01. */
@@ -173,14 +219,27 @@ export interface FlowOptions extends CommonOptions {
    * How the velocity field is obtained: `differences` (default) uses central
    * differences on the reconstructed density; `analytic` differentiates the cosine
    * series in the spectrum, which is exact for the represented field but costs three
-   * inverse transforms per step. Measured, `analytic` buys 0.02 percentage points of
-   * area error for twice the runtime — invisible either way.
+   * inverse transforms per step.
+   *
+   * How much it buys depends entirely on the map, and a single-dataset measurement is
+   * how this option came to be documented as pointless. At grid 512: on the twelve
+   * Dutch provinces it moves the median area error from 0.146% to 0.141%, which is
+   * nothing; on NUTS 2 it moves it from 1.334% to 0.412%, which is a factor of three;
+   * on world countries from 0.685% to 0.501%. It costs about 3x the runtime throughout,
+   * and on world countries it also takes the self-intersection count from 17 to 48.
+   *
+   * So: worth turning on for a map with many regions and a wide range of densities, and
+   * worth leaving off for a handful of similar ones.
    */
   gradient?: 'analytic' | 'differences';
   /**
-   * Local error tolerance of the adaptive step, in grid cells. Default 0.02. Tighter
-   * is more accurate and costs more steps, each of which is an inverse cosine
-   * transform — the dominant expense of this method.
+   * Local error tolerance of the adaptive step, in grid cells. Default 0.2.
+   *
+   * Counter-intuitively, tightening it makes the result worse as well as slower: swept
+   * over the seven datasets in `data/` at grid 512, 0.2 beat 0.02 on six and tied on the
+   * seventh, at half the runtime. See `FlowParams.tolerance` for why — briefly, a pass
+   * stops when the per-step vertex movement gets small, and small steps trigger that
+   * sooner than the flow deserves.
    */
   tolerance?: number;
   /** Passes over the whole flow, each re-rasterizing the current map. Default 10. */
@@ -243,6 +302,13 @@ export interface TopologyMetrics {
 
 export interface CartogramMetrics {
   areaError: AreaErrorMetrics;
+  /**
+   * What `grid: 'auto'` resolved to. Present for `flow` only, and worth reading whenever
+   * a result surprises you: the choice is made from the data, so this is the difference
+   * between "the method did badly" and "the method was given a grid a fifth of what this
+   * map needed".
+   */
+  resolved?: { grid: number };
   topology?: TopologyMetrics;
   /**
    * Shape-preservation guard (requirements F20a/F20b). Compactness is Polsby-Popper

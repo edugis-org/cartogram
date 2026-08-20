@@ -17,6 +17,10 @@ const result = cartogram(featureCollection, {
   missing: 'error',       // 'error' | 'zero' | 'mean' | 'drop'
   negative: 'error',      // 'error' | 'clamp'
   densify: 'auto',        // insert vertices before warping; 'auto' | number | false
+  fitLatitude: 85,        // shrink to keep coordinates inside ±85°; false to disable
+
+  // flow only:
+  grid: 512,              // resolution per side, or 'auto' to size it from the data
 
   // dcn only:
   iterations: 60,
@@ -193,6 +197,95 @@ than one. Measured on the datasets in `data/`:
 | `dorling` | no | circles | ~1e-13 | good for "which is biggest" questions |
 | `demers` | no | squares | ~1e-13 | as Dorling, squares tile better |
 
+### Staying inside the world
+
+A cartogram moves regions off the graticule they came from, and in a plane nothing stops
+that leaving the world. On world countries sized by population, India and China grow
+enough to push Russia off the top of the map: 1618 of the returned points came back at
+±90°, because unprojecting an out-of-range coordinate does not fail, it clamps — pressing
+them onto the pole line and smearing the shapes that own them.
+
+`fitLatitude` (default 85) shrinks the finished cartogram by the largest factor that
+brings every coordinate inside, and centres it vertically. On `world-110m` that is a
+scale to 92%, and it is a similarity: area error, shape, topology and self-intersections
+come back bit-identical. A map that never left the world — anything regional — is not
+touched at all, and the result is byte-for-byte what `fitLatitude: false` gives.
+
+Centring matters as much as the scale. The centre of mass of world countries sits well
+north of the equator, so scaling about it top-aligns the map: Russia stays jammed
+against the limit while Antarctica floats off the bottom. Centring shares the slack, and
+needs less shrink for it — 92% rather than 80%.
+
+### Grid resolution
+
+The flow's resolution limit is one specific thing: a region smaller than a grid cell
+cannot be represented in the density field, so it exerts no pressure and comes out shrunk
+however dense it is. Paris is 105 km² holding 2.1 million people and is exactly this
+failure.
+
+`grid: 'auto'` sizes the grid so that the smallest region *carrying real value* gets at
+least one cell. The value filter is what makes it usable rather than absurd: sizing to
+the smallest region outright asks for a grid of 82,000 on world countries, because
+somewhere in the file there is an islet. A tenth of the mean value share is a low enough
+bar to keep every region a reader would miss and high enough to drop the rocks — it lands
+on Singapore for world countries, Melilla for NUTS 3, Brussels for NUTS 2.
+
+It never goes below the default and is capped at 1024. Both bounds are deliberate: sizing
+purely to the minimum viable grid picks 256 for NUTS 0 and costs 0.51% → 1.25% area error
+for a saving nobody asked for, and the next doubling past 1024 costs four to five times
+the runtime for a diminishing return. Where 1024 is still not enough, the under-resolved
+warning says so.
+
+It is not the default, because it is not free — on NUTS 3 it picks 1024 over 512, which
+takes the area error from 15.9% to 4.5% and the runtime from 13 to 60 seconds. That is
+usually the right trade and it should still be yours. `metrics.resolved.grid` reports
+what it chose.
+
+### Velocity field
+
+`gradient` decides how the velocity is taken from the diffused density: `differences`
+(the default) by central differences, `analytic` by differentiating the cosine series in
+the spectrum. How much the exact one buys is a property of the map, not of the method —
+at grid 512, median area error:
+
+| dataset | `differences` | `analytic` | runtime |
+|---|---|---|---|
+| nl-provinces | 0.146% | 0.141% | 3.6 s → 11.7 s |
+| nuts2-20m | 1.334% | **0.412%** | 11.1 s → 33.2 s |
+| world-110m | 0.685% | 0.501% | 17.0 s → 47.1 s |
+
+The two agree wherever the density field is smooth at the scale of a cell and diverge
+where it is not — so on a dozen similar regions it is worth nothing, and on a map with
+many regions and sharp density contrasts it is worth a factor of three. It is not free
+even where it wins: on world countries it also takes the self-intersection count from 17
+to 48.
+
+### Step tolerance
+
+`tolerance` sets the adaptive integrator's local error target, in grid cells. Tightening
+it makes the result **worse as well as slower**, which is unusual enough to be worth
+stating: swept over all seven datasets in `data/` at grid 512, `0.2` beat `0.02` on the
+median area error of six and tied on the seventh, at half the runtime.
+
+| dataset | 0.02 | 0.2 | runtime |
+|---|---|---|---|
+| nl-provinces | 0.146% | 0.097% | 3.6 s → 1.7 s |
+| nl-municipalities | 0.068% | 0.038% | 10.0 s → 4.8 s |
+| nuts0-20m | 0.013% | 0.006% | 8.9 s → 5.0 s |
+| nuts2-20m | 1.334% | 1.034% | 11.3 s → 5.7 s |
+| nuts3-20m | 15.94% | 15.77% | 12.8 s → 6.2 s |
+| world-110m | 0.685% | 0.600% | 17.1 s → 8.8 s |
+| world-50m | 1.677% | 1.368% | 17.5 s → 8.4 s |
+
+The cause is an interaction, not a design: a pass stops when the largest vertex movement
+*in one step* gets small, and that movement scales with the step size, so a tight
+tolerance ends the pass while the flow still has somewhere to go. The accuracy it buys
+inside a pass is worth less than the flow it costs. `0.3` is past the edge — it regresses
+on the municipalities and on world countries — so the default is `0.2`.
+
+Topology error stayed at 0 across the whole sweep and shape drift was flat; the one cost
+is self-intersections on world countries, 17 at 0.02 against 23 at 0.2.
+
 Two honest caveats:
 
 - `dcn` introduces self-intersecting boundaries on real data (hundreds of segments on
@@ -201,7 +294,7 @@ Two honest caveats:
   need the speed.
 - `flow` is only as accurate as its grid: a region smaller than one grid cell can only be
   approximated. When that happens the result carries a warning naming the count. For
-  NUTS 3-scale data use `grid: 1024`.
+  NUTS 3-scale data use `grid: 1024`, or `grid: 'auto'` to have it worked out.
 
 ## API
 
@@ -219,7 +312,7 @@ cartogram(featureCollection, options) => {
 Common options: `value` (property name or accessor), `method`, `projection`
 (`auto` | `none` | `laea` | `cylindrical-equal-area`), `missing`
 (`error` | `zero` | `mean` | `drop`), `negative` (`error` | `clamp`), `unproject`,
-`densify`, `includeBaseline`, `metrics`.
+`densify`, `fitLatitude`, `includeBaseline`, `metrics`.
 
 Per-method options are typed on the union member — `fit` for `olson`; `iterations`,
 `targetError`, `cutoff`, `damping`, `shapeAnchor`, `smoothing` for `dcn`; `grid`,
